@@ -40,6 +40,11 @@ API_PROVIDER_PRESETS = {
 }
 
 
+def format_exception(error: Exception) -> str:
+    message = str(error).strip()
+    return message or error.__class__.__name__
+
+
 class LLMService:
     """支持OpenAI兼容API的LLM服务类"""
 
@@ -91,6 +96,9 @@ class LLMService:
                      f"api_base={self.api_base}, vision_model={self.vision_model}, "
                      f"image_model={self.image_model}")
 
+    def _has_valid_api_key(self) -> bool:
+        return bool(self.api_key) and not self.api_key.startswith("your_")
+
     def refresh_config(self) -> None:
         """Refresh runtime settings after the settings API updates values."""
         self._resolve_api_config()
@@ -129,7 +137,7 @@ class LLMService:
         Returns:
             包含分析结果的字典
         """
-        if not self.api_key:
+        if not self._has_valid_api_key():
             return self._mock_analysis()
 
         try:
@@ -193,16 +201,16 @@ class LLMService:
                     }
 
         except httpx.ConnectError as e:
-            logger.error(f"Vision API connection failed: {str(e)}")
+            logger.error(f"Vision API connection failed: {format_exception(e)}")
             return {
                 "success": False,
                 "error": f"API连接失败，请检查API地址是否正确: {self.api_base}"
             }
         except Exception as e:
-            logger.error(f"Image analysis failed: {str(e)}")
+            logger.error(f"Image analysis failed: {format_exception(e)}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": format_exception(e)
             }
 
     async def generate_image(self, prompt: str, style: Optional[str] = None, size: Optional[str] = None) -> dict:
@@ -217,7 +225,7 @@ class LLMService:
         Returns:
             包含生成图片URL的字典
         """
-        if not self.api_key:
+        if not self._has_valid_api_key():
             return self._mock_generation()
 
         # 检查是否为不支持文生图的API提供商
@@ -276,16 +284,16 @@ class LLMService:
                     }
 
         except httpx.ConnectError as e:
-            logger.error(f"Image generation connection failed: {str(e)}")
+            logger.error(f"Image generation connection failed: {format_exception(e)}")
             return {
                 "success": False,
                 "error": f"API连接失败，请检查API地址是否正确: {self.api_base}"
             }
         except Exception as e:
-            logger.error(f"Image generation failed: {str(e)}")
+            logger.error(f"Image generation failed: {format_exception(e)}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": format_exception(e)
             }
 
     async def _generate_image_mimo(self, prompt: str, size: Optional[str] = None) -> dict:
@@ -351,10 +359,10 @@ class LLMService:
                     }
 
         except Exception as e:
-            logger.error(f"MIMO Image generation failed: {str(e)}")
+            logger.error(f"MIMO Image generation failed: {format_exception(e)}")
             return {
                 "success": False,
-                "error": f"小米MIMO文生图失败: {str(e)}"
+                "error": f"小米MIMO文生图失败: {format_exception(e)}"
             }
 
     async def _generate_image_dashscope(self, prompt: str, size: Optional[str] = None) -> dict:
@@ -431,11 +439,15 @@ class LLMService:
                 max_retries = 60  # 最多等待60次，每次间隔3秒
                 for i in range(max_retries):
                     await asyncio.sleep(3)
-                    poll_response = await client.get(
-                        f"{dashscope_base}/tasks/{task_id}",
-                        headers=poll_headers,
-                        timeout=30.0
-                    )
+                    try:
+                        poll_response = await client.get(
+                            f"{dashscope_base}/tasks/{task_id}",
+                            headers=poll_headers,
+                            timeout=30.0
+                        )
+                    except httpx.TimeoutException as e:
+                        logger.warning("DashScope任务轮询超时，继续重试: %s", format_exception(e))
+                        continue
 
                     if poll_response.status_code != 200:
                         logger.warning(f"DashScope任务轮询失败: {poll_response.status_code}")
@@ -488,16 +500,16 @@ class LLMService:
                 }
 
         except httpx.ConnectError as e:
-            logger.error(f"DashScope文生图连接失败: {str(e)}")
+            logger.error(f"DashScope文生图连接失败: {format_exception(e)}")
             return {
                 "success": False,
-                "error": f"DashScope API连接失败: {str(e)}"
+                "error": f"DashScope API连接失败: {format_exception(e)}"
             }
         except Exception as e:
-            logger.error(f"DashScope文生图失败: {str(e)}")
+            logger.error(f"DashScope文生图失败: {format_exception(e)}")
             return {
                 "success": False,
-                "error": f"DashScope文生图异常: {str(e)}"
+                "error": f"DashScope文生图异常: {format_exception(e)}"
             }
 
     async def _download_image(self, url: str) -> str:
@@ -521,7 +533,7 @@ class LLMService:
     def get_config_info(self) -> dict:
         """返回当前API配置信息（用于前端展示，隐藏敏感信息）"""
         masked_key = ""
-        is_configured = bool(self.api_key) and not self.api_key.startswith("your_")
+        is_configured = self._has_valid_api_key()
         if is_configured:
             masked_key = self.api_key[:8] + "****" + self.api_key[-4:] if len(self.api_key) > 12 else "****"
 

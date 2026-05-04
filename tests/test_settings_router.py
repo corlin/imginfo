@@ -83,6 +83,7 @@ def test_placeholder_api_key_is_not_configured():
         llm_service.refresh_config()
 
         assert llm_service.get_config_info()["api_key_configured"] is False
+        assert llm_service._has_valid_api_key() is False
     finally:
         for key, value in previous.items():
             setattr(settings, key, value)

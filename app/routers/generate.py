@@ -13,6 +13,7 @@ from ..services.storage_paths import public_upload_url
 from ..services.task_store import task_store
 
 router = APIRouter()
+DASHSCOPE_ALLOWED_SIZES = {"1024x1024", "720x1280", "1280x720", "768x1152"}
 
 
 class GenerateRequest(BaseModel):
@@ -33,6 +34,27 @@ class GenerateResponse(BaseModel):
     prompt: str
     style: str
     message: str
+
+
+def resolve_generation_size(width: Optional[int], height: Optional[int]) -> tuple[str, int, int]:
+    requested = f"{width or 1024}x{height or 1024}"
+    provider = settings.API_PROVIDER.lower()
+    image_model = (settings.CUSTOM_IMAGE_MODEL or settings.OPENAI_IMAGE_MODEL or "").lower()
+
+    if provider == "aliyun" and "wanx" in image_model and requested not in DASHSCOPE_ALLOWED_SIZES:
+        return "1024x1024", 1024, 1024
+
+    size_map = {
+        (256, 256): "256x256",
+        (512, 512): "512x512",
+        (1024, 1024): "1024x1024",
+        (720, 1280): "720x1280",
+        (1280, 720): "1280x720",
+        (768, 1152): "768x1152",
+    }
+    size_str = size_map.get((width, height), "1024x1024")
+    parsed_width, parsed_height = [int(part) for part in size_str.split("x")]
+    return size_str, parsed_width, parsed_height
 
 
 @router.post("/generate")
@@ -103,12 +125,7 @@ async def run_image_generation(request: GenerateRequest, db: Session):
     )
     
     # 调用LLM文生图API
-    size_map = {
-        (256, 256): "256x256",
-        (512, 512): "512x512",
-        (1024, 1024): "1024x1024",
-    }
-    size_str = size_map.get((request.width, request.height), "1024x1024")
+    size_str, output_width, output_height = resolve_generation_size(request.width, request.height)
     
     # DALL-E风格映射
     dalle_style = "natural"
@@ -129,8 +146,8 @@ async def run_image_generation(request: GenerateRequest, db: Session):
         generated_images.append({
             "filename": os.path.basename(llm_result["local_path"]),
             "file_path": llm_result["local_path"],
-            "width": request.width,
-            "height": request.height,
+            "width": output_width,
+            "height": output_height,
             "url": public_upload_url(llm_result["local_path"]),
             "source_url": llm_result.get("image_url", "")
         })
@@ -138,8 +155,8 @@ async def run_image_generation(request: GenerateRequest, db: Session):
         generated_images.append({
             "filename": "generated_image",
             "file_path": None,
-            "width": request.width,
-            "height": request.height,
+            "width": output_width,
+            "height": output_height,
             "url": llm_result.get("image_url", "")
         })
     
