@@ -55,27 +55,32 @@ class LLMService:
         provider = settings.API_PROVIDER.lower()
         preset = API_PROVIDER_PRESETS.get(provider, {})
 
-        # API Base: 优先使用CUSTOM_API_BASE, 然后是预设, 最后是OPENAI_API_BASE
-        if settings.CUSTOM_API_BASE:
+        if provider == "openai":
+            self.api_base = settings.OPENAI_API_BASE.rstrip("/")
+        elif settings.CUSTOM_API_BASE:
             self.api_base = settings.CUSTOM_API_BASE.rstrip("/")
         elif provider in API_PROVIDER_PRESETS and preset.get("api_base"):
             self.api_base = preset["api_base"]
         else:
             self.api_base = settings.OPENAI_API_BASE.rstrip("/")
 
-        # API Key: 优先使用CUSTOM_API_KEY, 然后是OPENAI_API_KEY
-        self.api_key = settings.CUSTOM_API_KEY or settings.OPENAI_API_KEY
+        if provider == "openai":
+            self.api_key = settings.OPENAI_API_KEY
+        else:
+            self.api_key = settings.CUSTOM_API_KEY or settings.OPENAI_API_KEY
 
-        # Vision模型: 优先使用CUSTOM_VISION_MODEL, 然后是预设, 最后是OPENAI_VISION_MODEL
-        if settings.CUSTOM_VISION_MODEL:
+        if provider == "openai":
+            self.vision_model = settings.OPENAI_VISION_MODEL
+        elif settings.CUSTOM_VISION_MODEL:
             self.vision_model = settings.CUSTOM_VISION_MODEL
         elif provider in API_PROVIDER_PRESETS and preset.get("vision_model"):
             self.vision_model = preset["vision_model"]
         else:
             self.vision_model = settings.OPENAI_VISION_MODEL
 
-        # Image模型: 优先使用CUSTOM_IMAGE_MODEL, 然后是预设, 最后是OPENAI_IMAGE_MODEL
-        if settings.CUSTOM_IMAGE_MODEL:
+        if provider == "openai":
+            self.image_model = settings.OPENAI_IMAGE_MODEL
+        elif settings.CUSTOM_IMAGE_MODEL:
             self.image_model = settings.CUSTOM_IMAGE_MODEL
         elif provider in API_PROVIDER_PRESETS and preset.get("image_model"):
             self.image_model = preset["image_model"]
@@ -85,6 +90,14 @@ class LLMService:
         logger.info(f"LLM Service initialized: provider={provider}, "
                      f"api_base={self.api_base}, vision_model={self.vision_model}, "
                      f"image_model={self.image_model}")
+
+    def refresh_config(self) -> None:
+        """Refresh runtime settings after the settings API updates values."""
+        self._resolve_api_config()
+        self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
 
     def _image_to_base64(self, image_path: str) -> str:
         """将图片转换为base64编码"""
@@ -508,7 +521,8 @@ class LLMService:
     def get_config_info(self) -> dict:
         """返回当前API配置信息（用于前端展示，隐藏敏感信息）"""
         masked_key = ""
-        if self.api_key:
+        is_configured = bool(self.api_key) and not self.api_key.startswith("your_")
+        if is_configured:
             masked_key = self.api_key[:8] + "****" + self.api_key[-4:] if len(self.api_key) > 12 else "****"
 
         return {
@@ -516,7 +530,7 @@ class LLMService:
             "api_base": self.api_base,
             "vision_model": self.vision_model,
             "image_model": self.image_model,
-            "api_key_configured": bool(self.api_key),
+            "api_key_configured": is_configured,
             "api_key_preview": masked_key,
         }
 

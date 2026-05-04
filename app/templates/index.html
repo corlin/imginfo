@@ -428,18 +428,22 @@
             showLoading('保存中...');
             try {
                 const body = { api_provider: provider };
-                if(provider === 'custom') {
+                if(provider === 'openai') {
+                    body.openai_api_base = baseurl;
+                    if(apikey) body.openai_api_key = apikey;
+                    if(visionModel) body.openai_vision_model = visionModel;
+                    if(imageModel) body.openai_image_model = imageModel;
+                } else {
                     body.custom_api_base = baseurl;
-                    body.custom_api_key = apikey;
+                    if(apikey) body.custom_api_key = apikey;
                     body.custom_vision_model = visionModel;
                     body.custom_image_model = imageModel;
-                } else {
-                    body.openai_api_base = baseurl;
-                    body.openai_api_key = apikey;
                 }
-                // 注意：由于Settings是env配置，实际需要重启或.env更新
-                alert('配置已准备就绪。\n\n注意：当前配置通过.env文件管理，修改需要更新.env文件并重启服务。\n当前显示的是运行时配置信息。');
+                const d = await requestJson(`${API_BASE}/settings/api`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+                document.getElementById('api-status-text').textContent = d.llm_config.api_key_configured ? `✅ 已配置 (${d.llm_config.provider})` : '❌ 未配置';
+                document.getElementById('api-status-text').className = d.llm_config.api_key_configured ? 'font-medium text-green-600' : 'font-medium text-red-600';
                 hideLoading();
+                alert(d.message);
             } catch(e) {
                 hideLoading();
                 alert('保存失败: ' + e.message);

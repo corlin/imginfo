@@ -8,6 +8,7 @@ from ..config import settings
 from ..services.llm_service import llm_service
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+SUPPORTED_PROVIDERS = {"openai", "azure", "xiaomi_mimo", "aliyun", "zhipu", "baidu", "custom"}
 
 
 class APIConfigUpdate(BaseModel):
@@ -19,6 +20,8 @@ class APIConfigUpdate(BaseModel):
     custom_image_model: Optional[str] = None
     openai_api_key: Optional[str] = None
     openai_api_base: Optional[str] = None
+    openai_vision_model: Optional[str] = None
+    openai_image_model: Optional[str] = None
 
 
 class UploadConfigUpdate(BaseModel):
@@ -36,6 +39,33 @@ class ImageConfigUpdate(BaseModel):
     image_style: Optional[str] = None
     vision_max_tokens: Optional[int] = None
     vision_detail: Optional[str] = None
+
+
+def apply_api_config(update: APIConfigUpdate) -> dict:
+    data = update.model_dump(exclude_unset=True)
+    provider = data.get("api_provider")
+    if provider:
+        provider = provider.lower()
+        if provider not in SUPPORTED_PROVIDERS:
+            raise HTTPException(status_code=400, detail=f"不支持的API提供商: {provider}")
+        settings.API_PROVIDER = provider
+
+    field_map = {
+        "custom_api_base": "CUSTOM_API_BASE",
+        "custom_api_key": "CUSTOM_API_KEY",
+        "custom_vision_model": "CUSTOM_VISION_MODEL",
+        "custom_image_model": "CUSTOM_IMAGE_MODEL",
+        "openai_api_key": "OPENAI_API_KEY",
+        "openai_api_base": "OPENAI_API_BASE",
+        "openai_vision_model": "OPENAI_VISION_MODEL",
+        "openai_image_model": "OPENAI_IMAGE_MODEL",
+    }
+    for request_field, settings_field in field_map.items():
+        if request_field in data and data[request_field] is not None:
+            setattr(settings, settings_field, data[request_field].strip())
+
+    llm_service.refresh_config()
+    return llm_service.get_config_info()
 
 
 @router.get("/current")
@@ -127,6 +157,17 @@ async def get_available_providers():
                 "default_base": "",
             },
         ]
+    }
+
+
+@router.post("/api")
+async def update_api_settings(update: APIConfigUpdate):
+    """Update API configuration for the current running process."""
+    config = apply_api_config(update)
+    return {
+        "success": True,
+        "message": "API配置已更新（当前运行进程生效，重启后需同步.env）",
+        "llm_config": config,
     }
 
 
