@@ -265,7 +265,7 @@
             const g = document.getElementById('uploaded-grid'); g.innerHTML = '';
             for(const r of results) {
                 const res = await fetch(`${API_BASE}/images/${r.id}`); const img = await res.json();
-                g.innerHTML += `<div class="card rounded-lg overflow-hidden border cursor-pointer" onclick="selectImage(${img.id},this)"><div class="w-full h-32 bg-gray-200 flex items-center justify-center text-4xl">📷</div><div class="p-2"><p class="text-xs text-gray-500 truncate">${img.original_filename}</p><p class="text-xs text-gray-400">${img.width}×${img.height} · ${(img.file_size/1024).toFixed(1)}KB</p></div></div>`;
+                g.innerHTML += `<div class="card rounded-lg overflow-hidden border cursor-pointer" onclick="selectImage(${img.id},this)"><img src="${img.url}" alt="${img.original_filename}" class="w-full h-32 object-cover bg-gray-100"><div class="p-2"><p class="text-xs text-gray-500 truncate">${img.original_filename}</p><p class="text-xs text-gray-400">${img.width}×${img.height} · ${(img.file_size/1024).toFixed(1)}KB</p></div></div>`;
             }
         }
         async function selectImage(id, el) {
@@ -291,14 +291,14 @@
             showLoading('正在生成图片...');
             try { const r = await fetch(`${API_BASE}/generate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({analysis_id:currentAnalysisId,prompt,style:document.getElementById('style-select').value,width:parseInt(document.getElementById('gen-width').value),height:parseInt(document.getElementById('gen-height').value),num_images:1})});
                 const d = await r.json(); hideLoading(); setStep(4);
-                document.getElementById('generated-grid').innerHTML = d.generated_images.map(i=>`<div class="card rounded-lg overflow-hidden border"><div class="w-full h-48 bg-gray-200 flex items-center justify-center text-6xl">🖼️</div><div class="p-2 text-xs text-gray-500">${i.width}×${i.height}</div></div>`).join('');
+                document.getElementById('generated-grid').innerHTML = d.generated_images.map(i=>`<div class="card rounded-lg overflow-hidden border"><img src="${i.url}" alt="${i.filename}" class="w-full h-48 object-cover bg-gray-100"><div class="p-2 text-xs text-gray-500">${i.width}×${i.height}</div></div>`).join('');
             } catch(e) { hideLoading(); alert('生成失败: '+e.message); }
         }
         async function loadImages() {
             try { const r = await fetch(`${API_BASE}/images`); const d = await r.json();
                 const g = document.getElementById('gallery-grid');
                 if(!d.images.length) { g.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8">暂无图片</p>'; return; }
-                g.innerHTML = d.images.map(i=>`<div class="card rounded-lg overflow-hidden border"><div class="w-full h-32 bg-gray-200 flex items-center justify-center text-4xl">📷</div><div class="p-2"><p class="text-xs text-gray-500 truncate">${i.original_filename}</p><p class="text-xs text-gray-400">${i.width}×${i.height}</p><button onclick="deleteImage(${i.id})" class="text-xs text-red-400 hover:text-red-600 mt-1">删除</button></div></div>`).join('');
+                g.innerHTML = d.images.map(i=>`<div class="card rounded-lg overflow-hidden border"><img src="${i.url}" alt="${i.original_filename}" class="w-full h-32 object-cover bg-gray-100"><div class="p-2"><p class="text-xs text-gray-500 truncate">${i.original_filename}</p><p class="text-xs text-gray-400">${i.width}×${i.height}</p><button onclick="deleteImage(${i.id})" class="text-xs text-red-400 hover:text-red-600 mt-1">删除</button></div></div>`).join('');
             } catch(e) { console.error(e); }
         }
         async function loadAnalyses() {

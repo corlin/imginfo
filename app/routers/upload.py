@@ -11,6 +11,7 @@ from PIL import Image as PILImage
 from ..config import settings
 from ..database import get_db
 from ..models.image import Image
+from ..services.storage_paths import public_upload_url
 
 router = APIRouter()
 
@@ -132,6 +133,7 @@ async def upload_image(
         "id": db_image.id,
         "filename": new_filename,
         "original_filename": file.filename,
+        "url": public_upload_url(file_path),
         "file_size": len(content),
         "width": width,
         "height": height,
@@ -198,6 +200,7 @@ async def upload_multiple_images(
                 "id": db_image.id,
                 "filename": new_filename,
                 "original_filename": file.filename,
+                "url": public_upload_url(file_path),
                 "file_size": len(content),
                 "width": width,
                 "height": height
@@ -230,6 +233,7 @@ async def list_images(
                 "id": img.id,
                 "filename": img.filename,
                 "original_filename": img.original_filename,
+                "url": public_upload_url(img.file_path),
                 "file_size": img.file_size,
                 "file_type": img.file_type,
                 "width": img.width,
@@ -253,6 +257,7 @@ async def get_image(image_id: int, db: Session = Depends(get_db)):
         "id": image.id,
         "filename": image.filename,
         "original_filename": image.original_filename,
+        "url": public_upload_url(image.file_path),
         "file_path": image.file_path,
         "file_size": image.file_size,
         "file_type": image.file_type,

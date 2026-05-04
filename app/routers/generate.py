@@ -11,6 +11,7 @@ from ..models.image import Image
 from ..models.analysis import Analysis
 from ..config import settings
 from ..services.llm_service import llm_service
+from ..services.storage_paths import public_upload_url
 
 router = APIRouter()
 
@@ -98,7 +99,8 @@ async def generate_image(
             "file_path": llm_result["local_path"],
             "width": request.width,
             "height": request.height,
-            "url": llm_result.get("image_url", "")
+            "url": public_upload_url(llm_result["local_path"]),
+            "source_url": llm_result.get("image_url", "")
         })
     else:
         generated_images.append({
