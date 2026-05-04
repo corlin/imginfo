@@ -240,6 +240,15 @@
     <script>
         const API_BASE = '/api/v1';
         let uploadedFiles = [], selectedImageId = null, currentAnalysisId = null;
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[c]));
+        }
         function showTab(tab) {
             document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.add('hidden'));
             document.querySelectorAll('[id^="tab-"]').forEach(t => { t.classList.remove('bg-blue-500','text-white'); t.classList.add('text-gray-600'); });
@@ -250,7 +259,7 @@
         function handleFiles(files) {
             const g = document.getElementById('preview-grid'); g.innerHTML = '';
             uploadedFiles = Array.from(files);
-            files.forEach(f => { const r = new FileReader(); r.onload = e => { g.innerHTML += `<div class="rounded-lg overflow-hidden border"><img src="${e.target.result}" class="w-full h-32 object-cover"><div class="p-2 text-xs text-gray-500 truncate">${f.name}</div></div>`; }; r.readAsDataURL(f); });
+            files.forEach(f => { const r = new FileReader(); r.onload = e => { g.innerHTML += `<div class="rounded-lg overflow-hidden border"><img src="${e.target.result}" alt="${escapeHtml(f.name)}" class="w-full h-32 object-cover"><div class="p-2 text-xs text-gray-500 truncate">${escapeHtml(f.name)}</div></div>`; }; r.readAsDataURL(f); });
             document.getElementById('preview-area').classList.remove('hidden');
         }
         async function uploadAll() {
@@ -265,7 +274,7 @@
             const g = document.getElementById('uploaded-grid'); g.innerHTML = '';
             for(const r of results) {
                 const res = await fetch(`${API_BASE}/images/${r.id}`); const img = await res.json();
-                g.innerHTML += `<div class="card rounded-lg overflow-hidden border cursor-pointer" onclick="selectImage(${img.id},this)"><img src="${img.url}" alt="${img.original_filename}" class="w-full h-32 object-cover bg-gray-100"><div class="p-2"><p class="text-xs text-gray-500 truncate">${img.original_filename}</p><p class="text-xs text-gray-400">${img.width}×${img.height} · ${(img.file_size/1024).toFixed(1)}KB</p></div></div>`;
+                g.innerHTML += `<div class="card rounded-lg overflow-hidden border cursor-pointer" onclick="selectImage(${img.id},this)"><img src="${escapeHtml(img.url)}" alt="${escapeHtml(img.original_filename)}" class="w-full h-32 object-cover bg-gray-100"><div class="p-2"><p class="text-xs text-gray-500 truncate">${escapeHtml(img.original_filename)}</p><p class="text-xs text-gray-400">${img.width}×${img.height} · ${(img.file_size/1024).toFixed(1)}KB</p></div></div>`;
             }
         }
         async function selectImage(id, el) {
@@ -278,10 +287,10 @@
         }
         function displayAnalysis(d) {
             document.getElementById('analysis-result').innerHTML = `
-                <div class="bg-blue-50 rounded-lg p-4"><h3 class="font-medium text-blue-800 mb-2">技术描述</h3><p class="text-sm text-gray-700">${d.technical_description}</p></div>
-                <div class="bg-green-50 rounded-lg p-4"><h3 class="font-medium text-green-800 mb-2">关键特征</h3><ul class="text-sm text-gray-700 space-y-1">${d.key_features.map(f=>`<li>• ${f}</li>`).join('')}</ul></div>
-                <div class="bg-purple-50 rounded-lg p-4"><h3 class="font-medium text-purple-800 mb-2">专利要素</h3><div class="text-sm text-gray-700 space-y-1"><p><b>标题:</b> ${d.patent_elements.title}</p><p><b>技术问题:</b> ${d.patent_elements.technical_problem}</p><p><b>解决方案:</b> ${d.patent_elements.solution}</p><p><b>优势:</b> ${d.patent_elements.advantage}</p></div></div>
-                <div class="bg-yellow-50 rounded-lg p-4"><h3 class="font-medium text-yellow-800 mb-2">新颖性分析</h3><p class="text-sm text-gray-700 whitespace-pre-line">${d.novelty_analysis}</p></div>`;
+                <div class="bg-blue-50 rounded-lg p-4"><h3 class="font-medium text-blue-800 mb-2">技术描述</h3><p class="text-sm text-gray-700">${escapeHtml(d.technical_description)}</p></div>
+                <div class="bg-green-50 rounded-lg p-4"><h3 class="font-medium text-green-800 mb-2">关键特征</h3><ul class="text-sm text-gray-700 space-y-1">${d.key_features.map(f=>`<li>• ${escapeHtml(f)}</li>`).join('')}</ul></div>
+                <div class="bg-purple-50 rounded-lg p-4"><h3 class="font-medium text-purple-800 mb-2">专利要素</h3><div class="text-sm text-gray-700 space-y-1"><p><b>标题:</b> ${escapeHtml(d.patent_elements.title)}</p><p><b>技术问题:</b> ${escapeHtml(d.patent_elements.technical_problem)}</p><p><b>解决方案:</b> ${escapeHtml(d.patent_elements.solution)}</p><p><b>优势:</b> ${escapeHtml(d.patent_elements.advantage)}</p></div></div>
+                <div class="bg-yellow-50 rounded-lg p-4"><h3 class="font-medium text-yellow-800 mb-2">新颖性分析</h3><p class="text-sm text-gray-700 whitespace-pre-line">${escapeHtml(d.novelty_analysis)}</p></div>`;
             document.getElementById('gen-prompt').value = `基于专利分析，请生成${d.patent_elements.title}的详细技术插图，突出以下特征：${d.key_features.join('、')}`;
         }
         async function generateImage() {
@@ -291,21 +300,21 @@
             showLoading('正在生成图片...');
             try { const r = await fetch(`${API_BASE}/generate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({analysis_id:currentAnalysisId,prompt,style:document.getElementById('style-select').value,width:parseInt(document.getElementById('gen-width').value),height:parseInt(document.getElementById('gen-height').value),num_images:1})});
                 const d = await r.json(); hideLoading(); setStep(4);
-                document.getElementById('generated-grid').innerHTML = d.generated_images.map(i=>`<div class="card rounded-lg overflow-hidden border"><img src="${i.url}" alt="${i.filename}" class="w-full h-48 object-cover bg-gray-100"><div class="p-2 text-xs text-gray-500">${i.width}×${i.height}</div></div>`).join('');
+                document.getElementById('generated-grid').innerHTML = d.generated_images.map(i=>`<div class="card rounded-lg overflow-hidden border"><img src="${escapeHtml(i.url)}" alt="${escapeHtml(i.filename)}" class="w-full h-48 object-cover bg-gray-100"><div class="p-2 text-xs text-gray-500">${i.width}×${i.height}</div></div>`).join('');
             } catch(e) { hideLoading(); alert('生成失败: '+e.message); }
         }
         async function loadImages() {
             try { const r = await fetch(`${API_BASE}/images`); const d = await r.json();
                 const g = document.getElementById('gallery-grid');
                 if(!d.images.length) { g.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8">暂无图片</p>'; return; }
-                g.innerHTML = d.images.map(i=>`<div class="card rounded-lg overflow-hidden border"><img src="${i.url}" alt="${i.original_filename}" class="w-full h-32 object-cover bg-gray-100"><div class="p-2"><p class="text-xs text-gray-500 truncate">${i.original_filename}</p><p class="text-xs text-gray-400">${i.width}×${i.height}</p><button onclick="deleteImage(${i.id})" class="text-xs text-red-400 hover:text-red-600 mt-1">删除</button></div></div>`).join('');
+                g.innerHTML = d.images.map(i=>`<div class="card rounded-lg overflow-hidden border"><img src="${escapeHtml(i.url)}" alt="${escapeHtml(i.original_filename)}" class="w-full h-32 object-cover bg-gray-100"><div class="p-2"><p class="text-xs text-gray-500 truncate">${escapeHtml(i.original_filename)}</p><p class="text-xs text-gray-400">${i.width}×${i.height}</p><button onclick="deleteImage(${i.id})" class="text-xs text-red-400 hover:text-red-600 mt-1">删除</button></div></div>`).join('');
             } catch(e) { console.error(e); }
         }
         async function loadAnalyses() {
             try { const r = await fetch(`${API_BASE}/analyses`); const d = await r.json();
                 const l = document.getElementById('analysis-list');
                 if(!d.analyses.length) { l.innerHTML = '<p class="text-center text-gray-400 py-8">暂无分析记录</p>'; return; }
-                l.innerHTML = d.analyses.map(a=>`<div class="card border rounded-lg p-4 flex items-center justify-between"><div><p class="font-medium">分析 #${a.id}</p><p class="text-sm text-gray-500">图片ID: ${a.image_id} · 模型: ${a.model_name}</p><p class="text-xs text-gray-400">${a.created_at}</p></div><button onclick="viewAnalysis(${a.id})" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">查看</button></div>`).join('');
+                l.innerHTML = d.analyses.map(a=>`<div class="card border rounded-lg p-4 flex items-center justify-between"><div><p class="font-medium">分析 #${a.id}</p><p class="text-sm text-gray-500">图片ID: ${a.image_id} · 模型: ${escapeHtml(a.model_name)}</p><p class="text-xs text-gray-400">${escapeHtml(a.created_at)}</p></div><button onclick="viewAnalysis(${a.id})" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">查看</button></div>`).join('');
             } catch(e) { console.error(e); }
         }
         async function viewAnalysis(id) {
