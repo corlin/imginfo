@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.venv/
+venv/
+ENV/
+
+# 环境配置（敏感信息）
+.env
+
+# 数据库
+*.db
+*.sqlite3
+
+# 上传文件
+uploads/*
+!uploads/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# uv
+# uv.lock - 不忽略，因为需要锁定依赖版本

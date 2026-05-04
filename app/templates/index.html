@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片信息解析系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .upload-area { border: 2px dashed #cbd5e0; transition: all 0.3s; }
+        .upload-area:hover, .upload-area.dragover { border-color: #4299e1; background: #ebf8ff; }
+        .card { transition: all 0.3s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .step-active { background: #4299e1; color: white; }
+        .step-inactive { background: #e2e8f0; color: #718096; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="app">
+        <nav class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+                <h1 class="text-xl font-bold text-gray-800">📸 图片信息解析系统</h1>
+                <div class="flex space-x-2">
+                    <button onclick="showTab('upload')" id="tab-upload" class="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500 text-white">上传</button>
+                    <button onclick="showTab('gallery')" id="tab-gallery" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">图库</button>
+                    <button onclick="showTab('analysis')" id="tab-analysis" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">分析</button>
+                    <button onclick="showTab('settings')" id="tab-settings" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">⚙️ 设置</button>
+                </div>
+            </div>
+        </nav>
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <div id="panel-upload" class="fade-in">
+                <div class="flex items-center justify-center mb-8">
+                    <div class="flex items-center">
+                        <div id="step1" class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-active">1</div>
+                        <div class="w-20 h-1 bg-blue-200"></div>
+                        <div id="step2" class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-inactive">2</div>
+                        <div class="w-20 h-1 bg-gray-200"></div>
+                        <div id="step3" class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-inactive">3</div>
+                        <div class="w-20 h-1 bg-gray-200"></div>
+                        <div id="step4" class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-inactive">4</div>
+                    </div>
+                </div>
+                <div id="step1-panel">
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h2 class="text-lg font-semibold mb-4">上传图片</h2>
+                        <div class="upload-area rounded-xl p-12 text-center cursor-pointer" onclick="document.getElementById('fileInput').click()">
+                            <input type="file" id="fileInput" multiple accept="image/*" class="hidden" onchange="handleFiles(this.files)">
+                            <div class="text-5xl mb-4">📁</div>
+                            <p class="text-gray-600 mb-2">拖拽图片到此处或点击上传</p>
+                            <p class="text-sm text-gray-400">支持 JPG, PNG, BMP, GIF, TIFF, WebP · 最大 10MB</p>
+                        </div>
+                    </div>
+                    <div id="preview-area" class="hidden">
+                        <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                            <h2 class="text-lg font-semibold mb-4">待上传图片</h2>
+                            <div id="preview-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"></div>
+                            <div class="flex justify-end">
+                                <button onclick="uploadAll()" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">上传全部</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="step2-panel" class="hidden">
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h2 class="text-lg font-semibold mb-4">选择图片进行专利分析</h2>
+                        <div id="uploaded-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"></div>
+                    </div>
+                </div>
+                <div id="step3-panel" class="hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white rounded-xl shadow-sm p-6">
+                            <h2 class="text-lg font-semibold mb-4">分析结果</h2>
+                            <div id="analysis-result" class="space-y-4"></div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm p-6">
+                            <h2 class="text-lg font-semibold mb-4">图片生成</h2>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">生成风格</label>
+                                    <select id="style-select" class="w-full border rounded-lg px-3 py-2">
+                                        <option value="realistic">写实风格</option>
+                                        <option value="sketch">草图风格</option>
+                                        <option value="technical">技术图纸</option>
+                                        <option value="artistic">艺术风格</option>
+                                        <option value="3d">3D渲染</option>
+                                        <option value="blueprint">蓝图风格</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">优化指令</label>
+                                    <textarea id="gen-prompt" rows="4" class="w-full border rounded-lg px-3 py-2" placeholder="输入生成指令..."></textarea>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div><label class="block text-sm font-medium text-gray-700 mb-1">宽度</label><input type="number" id="gen-width" value="512" class="w-full border rounded-lg px-3 py-2"></div>
+                                    <div><label class="block text-sm font-medium text-gray-700 mb-1">高度</label><input type="number" id="gen-height" value="512" class="w-full border rounded-lg px-3 py-2"></div>
+                                </div>
+                                <button onclick="generateImage()" class="w-full px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">🎨 生成图片</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="step4-panel" class="hidden">
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h2 class="text-lg font-semibold mb-4">生成结果</h2>
+                        <div id="generated-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+                        <div class="mt-6 flex justify-center">
+                            <button onclick="resetFlow()" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">重新开始</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="panel-gallery" class="hidden fade-in">
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold">图片库</h2>
+                        <button onclick="loadImages()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">刷新</button>
+                    </div>
+                    <div id="gallery-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+                </div>
+            </div>
+            <div id="panel-analysis" class="hidden fade-in">
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold">分析记录</h2>
+                        <button onclick="loadAnalyses()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">刷新</button>
+                    </div>
+                    <div id="analysis-list" class="space-y-4"></div>
+                </div>
+            </div>
+            <div id="panel-settings" class="hidden fade-in">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h2 class="text-lg font-semibold mb-4">🔑 API配置</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">API提供商</label>
+                                <select id="settings-provider" onchange="onProviderChange()" class="w-full border rounded-lg px-3 py-2">
+                                    <option value="openai">OpenAI</option>
+                                    <option value="xiaomi_mimo">小米MIMO</option>
+                                    <option value="aliyun">阿里云通义千问</option>
+                                    <option value="zhipu">智谱AI</option>
+                                    <option value="custom">自定义</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                                <input type="password" id="settings-apikey" class="w-full border rounded-lg px-3 py-2" placeholder="输入API Key">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">API Base URL</label>
+                                <input type="text" id="settings-baseurl" class="w-full border rounded-lg px-3 py-2" placeholder="如: https://api.openai.com/v1">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">视觉模型</label>
+                                <input type="text" id="settings-vision-model" class="w-full border rounded-lg px-3 py-2" placeholder="如: gpt-4o">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">图像生成模型</label>
+                                <input type="text" id="settings-image-model" class="w-full border rounded-lg px-3 py-2" placeholder="如: dall-e-3">
+                            </div>
+                            <div class="flex space-x-3">
+                                <button onclick="testConnection()" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm">🔗 测试连接</button>
+                                <button onclick="saveAPISettings()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">💾 保存配置</button>
+                            </div>
+                            <div id="api-test-result" class="hidden text-sm p-3 rounded-lg"></div>
+                            <div class="bg-gray-50 rounded-lg p-3">
+                                <p class="text-xs text-gray-500">当前状态: <span id="api-status-text" class="font-medium">加载中...</span></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h2 class="text-lg font-semibold mb-4">📁 上传限制</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">最大文件大小 (MB)</label>
+                                <input type="number" id="settings-max-size" value="10" class="w-full border rounded-lg px-3 py-2">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">允许的扩展名</label>
+                                <input type="text" id="settings-extensions" value="jpg,png,bmp,gif,tiff,webp" class="w-full border rounded-lg px-3 py-2">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">最小宽度</label>
+                                    <input type="number" id="settings-min-w" value="100" class="w-full border rounded-lg px-3 py-2">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">最小高度</label>
+                                    <input type="number" id="settings-min-h" value="100" class="w-full border rounded-lg px-3 py-2">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">最大宽度</label>
+                                    <input type="number" id="settings-max-w" value="8192" class="w-full border rounded-lg px-3 py-2">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">最大高度</label>
+                                    <input type="number" id="settings-max-h" value="8192" class="w-full border rounded-lg px-3 py-2">
+                                </div>
+                            </div>
+                        </div>
+                        <h2 class="text-lg font-semibold mb-4 mt-6">🎨 图片生成参数</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">默认尺寸</label>
+                                <select id="settings-img-size" class="w-full border rounded-lg px-3 py-2">
+                                    <option value="256x256">256×256</option>
+                                    <option value="512x512">512×512</option>
+                                    <option value="1024x1024">1024×1024</option>
+                                    <option value="1024x1792">1024×1792</option>
+                                    <option value="1792x1024">1792×1024</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">图片质量</label>
+                                <select id="settings-img-quality" class="w-full border rounded-lg px-3 py-2">
+                                    <option value="standard">标准</option>
+                                    <option value="hd">高清</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Vision最大Token</label>
+                                <input type="number" id="settings-vision-tokens" value="4096" class="w-full border rounded-lg px-3 py-2">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="loading" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+            <div class="bg-white rounded-xl p-6 text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <p id="loading-text" class="text-gray-600">处理中...</p>
+            </div>
+        </div>
+    </div>
+    <script>
+        const API_BASE = '/api/v1';
+        let uploadedFiles = [], selectedImageId = null, currentAnalysisId = null;
+        function showTab(tab) {
+            document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('[id^="tab-"]').forEach(t => { t.classList.remove('bg-blue-500','text-white'); t.classList.add('text-gray-600'); });
+            document.getElementById(`panel-${tab}`).classList.remove('hidden');
+            const b = document.getElementById(`tab-${tab}`); b.classList.add('bg-blue-500','text-white'); b.classList.remove('text-gray-600');
+            if(tab==='gallery') loadImages(); if(tab==='analysis') loadAnalyses(); if(tab==='settings') loadSettings();
+        }
+        function handleFiles(files) {
+            const g = document.getElementById('preview-grid'); g.innerHTML = '';
+            uploadedFiles = Array.from(files);
+            files.forEach(f => { const r = new FileReader(); r.onload = e => { g.innerHTML += `<div class="rounded-lg overflow-hidden border"><img src="${e.target.result}" class="w-full h-32 object-cover"><div class="p-2 text-xs text-gray-500 truncate">${f.name}</div></div>`; }; r.readAsDataURL(f); });
+            document.getElementById('preview-area').classList.remove('hidden');
+        }
+        async function uploadAll() {
+            if(!uploadedFiles.length) return; showLoading('正在上传...');
+            const fd = new FormData(); uploadedFiles.forEach(f => fd.append('files', f));
+            try { const r = await fetch(`${API_BASE}/upload/multiple`,{method:'POST',body:fd}); const d = await r.json(); hideLoading();
+                if(d.results?.length) { setStep(2); loadUploadedImages(d.results); }
+                if(d.errors?.length) alert('部分上传失败: '+d.errors.map(e=>e.error).join(', '));
+            } catch(e) { hideLoading(); alert('上传失败: '+e.message); }
+        }
+        async function loadUploadedImages(results) {
+            const g = document.getElementById('uploaded-grid'); g.innerHTML = '';
+            for(const r of results) {
+                const res = await fetch(`${API_BASE}/images/${r.id}`); const img = await res.json();
+                g.innerHTML += `<div class="card rounded-lg overflow-hidden border cursor-pointer" onclick="selectImage(${img.id},this)"><div class="w-full h-32 bg-gray-200 flex items-center justify-center text-4xl">📷</div><div class="p-2"><p class="text-xs text-gray-500 truncate">${img.original_filename}</p><p class="text-xs text-gray-400">${img.width}×${img.height} · ${(img.file_size/1024).toFixed(1)}KB</p></div></div>`;
+            }
+        }
+        async function selectImage(id, el) {
+            selectedImageId = id;
+            document.querySelectorAll('#uploaded-grid .card').forEach(c=>c.classList.remove('ring-2','ring-blue-500'));
+            el.classList.add('ring-2','ring-blue-500'); showLoading('正在分析...');
+            try { const r = await fetch(`${API_BASE}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_id:id,model_name:'default',patent_focus:'general'})});
+                const d = await r.json(); hideLoading(); currentAnalysisId = d.id; setStep(3); displayAnalysis(d);
+            } catch(e) { hideLoading(); alert('分析失败: '+e.message); }
+        }
+        function displayAnalysis(d) {
+            document.getElementById('analysis-result').innerHTML = `
+                <div class="bg-blue-50 rounded-lg p-4"><h3 class="font-medium text-blue-800 mb-2">技术描述</h3><p class="text-sm text-gray-700">${d.technical_description}</p></div>
+                <div class="bg-green-50 rounded-lg p-4"><h3 class="font-medium text-green-800 mb-2">关键特征</h3><ul class="text-sm text-gray-700 space-y-1">${d.key_features.map(f=>`<li>• ${f}</li>`).join('')}</ul></div>
+                <div class="bg-purple-50 rounded-lg p-4"><h3 class="font-medium text-purple-800 mb-2">专利要素</h3><div class="text-sm text-gray-700 space-y-1"><p><b>标题:</b> ${d.patent_elements.title}</p><p><b>技术问题:</b> ${d.patent_elements.technical_problem}</p><p><b>解决方案:</b> ${d.patent_elements.solution}</p><p><b>优势:</b> ${d.patent_elements.advantage}</p></div></div>
+                <div class="bg-yellow-50 rounded-lg p-4"><h3 class="font-medium text-yellow-800 mb-2">新颖性分析</h3><p class="text-sm text-gray-700 whitespace-pre-line">${d.novelty_analysis}</p></div>`;
+            document.getElementById('gen-prompt').value = `基于专利分析，请生成${d.patent_elements.title}的详细技术插图，突出以下特征：${d.key_features.join('、')}`;
+        }
+        async function generateImage() {
+            if(!currentAnalysisId) { alert('请先完成分析'); return; }
+            const prompt = document.getElementById('gen-prompt').value;
+            if(!prompt) { alert('请输入生成指令'); return; }
+            showLoading('正在生成图片...');
+            try { const r = await fetch(`${API_BASE}/generate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({analysis_id:currentAnalysisId,prompt,style:document.getElementById('style-select').value,width:parseInt(document.getElementById('gen-width').value),height:parseInt(document.getElementById('gen-height').value),num_images:1})});
+                const d = await r.json(); hideLoading(); setStep(4);
+                document.getElementById('generated-grid').innerHTML = d.generated_images.map(i=>`<div class="card rounded-lg overflow-hidden border"><div class="w-full h-48 bg-gray-200 flex items-center justify-center text-6xl">🖼️</div><div class="p-2 text-xs text-gray-500">${i.width}×${i.height}</div></div>`).join('');
+            } catch(e) { hideLoading(); alert('生成失败: '+e.message); }
+        }
+        async function loadImages() {
+            try { const r = await fetch(`${API_BASE}/images`); const d = await r.json();
+                const g = document.getElementById('gallery-grid');
+                if(!d.images.length) { g.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8">暂无图片</p>'; return; }
+                g.innerHTML = d.images.map(i=>`<div class="card rounded-lg overflow-hidden border"><div class="w-full h-32 bg-gray-200 flex items-center justify-center text-4xl">📷</div><div class="p-2"><p class="text-xs text-gray-500 truncate">${i.original_filename}</p><p class="text-xs text-gray-400">${i.width}×${i.height}</p><button onclick="deleteImage(${i.id})" class="text-xs text-red-400 hover:text-red-600 mt-1">删除</button></div></div>`).join('');
+            } catch(e) { console.error(e); }
+        }
+        async function loadAnalyses() {
+            try { const r = await fetch(`${API_BASE}/analyses`); const d = await r.json();
+                const l = document.getElementById('analysis-list');
+                if(!d.analyses.length) { l.innerHTML = '<p class="text-center text-gray-400 py-8">暂无分析记录</p>'; return; }
+                l.innerHTML = d.analyses.map(a=>`<div class="card border rounded-lg p-4 flex items-center justify-between"><div><p class="font-medium">分析 #${a.id}</p><p class="text-sm text-gray-500">图片ID: ${a.image_id} · 模型: ${a.model_name}</p><p class="text-xs text-gray-400">${a.created_at}</p></div><button onclick="viewAnalysis(${a.id})" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">查看</button></div>`).join('');
+            } catch(e) { console.error(e); }
+        }
+        async function viewAnalysis(id) {
+            showLoading('加载中...'); try { const r = await fetch(`${API_BASE}/analysis/${id}`); const d = await r.json(); hideLoading(); showTab('upload'); currentAnalysisId = id; setStep(3); displayAnalysis(d); } catch(e) { hideLoading(); }
+        }
+        async function deleteImage(id) { if(!confirm('确定删除？')) return; try { await fetch(`${API_BASE}/images/${id}`,{method:'DELETE'}); loadImages(); } catch(e) { alert('删除失败'); } }
+        function setStep(n) { for(let i=1;i<=4;i++) { const s=document.getElementById(`step${i}`),p=document.getElementById(`step${i}-panel`); s.className=i<=n?'w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-active':'w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-inactive'; p.classList.toggle('hidden',i!==n); } }
+        function resetFlow() { selectedImageId=null; currentAnalysisId=null; uploadedFiles=[]; setStep(1); document.getElementById('preview-area').classList.add('hidden'); }
+        const ua = document.querySelector('.upload-area');
+        ua.addEventListener('dragover', e=>{e.preventDefault();ua.classList.add('dragover');});
+        ua.addEventListener('dragleave', ()=>ua.classList.remove('dragover'));
+        ua.addEventListener('drop', e=>{e.preventDefault();ua.classList.remove('dragover');handleFiles(e.dataTransfer.files);});
+        function showLoading(t) { document.getElementById('loading-text').textContent=t; document.getElementById('loading').classList.remove('hidden'); }
+        function hideLoading() { document.getElementById('loading').classList.add('hidden'); }
+
+        // 设置相关函数
+        const providerDefaults = {
+            openai: { base: 'https://api.openai.com/v1', vision: 'gpt-4o', image: 'dall-e-3' },
+            xiaomi_mimo: { base: 'https://api.mimo.xiaomi.com/v1', vision: 'MiMo-VL-7B', image: '' },
+            aliyun: { base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', vision: 'qwen-vl-plus', image: 'wanx-v1' },
+            zhipu: { base: 'https://open.bigmodel.cn/api/paas/v4', vision: 'glm-4v', image: 'cogview-3' },
+            custom: { base: '', vision: '', image: '' }
+        };
+
+        async function loadSettings() {
+            try {
+                const r = await fetch(`${API_BASE}/settings/current`);
+                const d = await r.json();
+                // 填充当前配置
+                document.getElementById('settings-provider').value = d.api.provider || 'openai';
+                document.getElementById('settings-baseurl').value = d.api.custom_api_base !== '未配置' ? d.api.custom_api_base : d.api.openai_api_base;
+                document.getElementById('settings-vision-model').value = d.api.openai_vision_model;
+                document.getElementById('settings-image-model').value = d.api.openai_image_model;
+                document.getElementById('settings-max-size').value = d.upload.max_file_size_mb;
+                document.getElementById('settings-extensions').value = d.upload.allowed_extensions.join(',');
+                document.getElementById('settings-min-w').value = d.upload.min_resolution[0];
+                document.getElementById('settings-min-h').value = d.upload.min_resolution[1];
+                document.getElementById('settings-max-w').value = d.upload.max_resolution[0];
+                document.getElementById('settings-max-h').value = d.upload.max_resolution[1];
+                document.getElementById('settings-img-size').value = d.image.image_size;
+                document.getElementById('settings-img-quality').value = d.image.image_quality;
+                document.getElementById('settings-vision-tokens').value = d.image.vision_max_tokens;
+                // API状态
+                document.getElementById('api-status-text').textContent = d.api.api_key_configured ? `✅ 已配置 (${d.api.provider})` : '❌ 未配置';
+                document.getElementById('api-status-text').className = d.api.api_key_configured ? 'font-medium text-green-600' : 'font-medium text-red-600';
+            } catch(e) {
+                console.error('加载设置失败:', e);
+            }
+        }
+
+        function onProviderChange() {
+            const p = document.getElementById('settings-provider').value;
+            const defaults = providerDefaults[p];
+            if(defaults) {
+                document.getElementById('settings-baseurl').value = defaults.base;
+                document.getElementById('settings-vision-model').value = defaults.vision;
+                document.getElementById('settings-image-model').value = defaults.image;
+            }
+        }
+
+        async function testConnection() {
+            const btn = event.target;
+            btn.disabled = true; btn.textContent = '测试中...';
+            const resultEl = document.getElementById('api-test-result');
+            try {
+                const r = await fetch(`${API_BASE}/settings/test-connection`, {method: 'POST'});
+                const d = await r.json();
+                resultEl.classList.remove('hidden');
+                if(d.success) {
+                    resultEl.className = 'text-sm p-3 rounded-lg bg-green-50 text-green-800 border border-green-200';
+                    resultEl.textContent = '✅ ' + d.message + ' (提供商: ' + d.provider + ')';
+                } else {
+                    resultEl.className = 'text-sm p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
+                    resultEl.textContent = '❌ ' + d.message;
+                }
+            } catch(e) {
+                resultEl.classList.remove('hidden');
+                resultEl.className = 'text-sm p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
+                resultEl.textContent = '❌ 测试失败: ' + e.message;
+            }
+            btn.disabled = false; btn.textContent = '🔗 测试连接';
+        }
+
+        async function saveAPISettings() {
+            const provider = document.getElementById('settings-provider').value;
+            const apikey = document.getElementById('settings-apikey').value;
+            const baseurl = document.getElementById('settings-baseurl').value;
+            const visionModel = document.getElementById('settings-vision-model').value;
+            const imageModel = document.getElementById('settings-image-model').value;
+            showLoading('保存中...');
+            try {
+                const body = { api_provider: provider };
+                if(provider === 'custom') {
+                    body.custom_api_base = baseurl;
+                    body.custom_api_key = apikey;
+                    body.custom_vision_model = visionModel;
+                    body.custom_image_model = imageModel;
+                } else {
+                    body.openai_api_base = baseurl;
+                    body.openai_api_key = apikey;
+                }
+                // 注意：由于Settings是env配置，实际需要重启或.env更新
+                alert('配置已准备就绪。\n\n注意：当前配置通过.env文件管理，修改需要更新.env文件并重启服务。\n当前显示的是运行时配置信息。');
+                hideLoading();
+            } catch(e) {
+                hideLoading();
+                alert('保存失败: ' + e.message);
+            }
+        }
+    </script>
+</body>
+</html>
