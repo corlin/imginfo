@@ -42,12 +42,13 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # 导入路由
-from .routers import upload, analysis, generate
+from .routers import upload, analysis, generate, tasks
 from .routers.settings_router import router as settings_router
 
 app.include_router(upload.router, prefix=settings.API_V1_STR, tags=["upload"])
 app.include_router(analysis.router, prefix=settings.API_V1_STR, tags=["analysis"])
 app.include_router(generate.router, prefix=settings.API_V1_STR, tags=["generate"])
+app.include_router(tasks.router, prefix=settings.API_V1_STR, tags=["tasks"])
 app.include_router(settings_router, prefix=settings.API_V1_STR, tags=["settings"])
 
 @app.get("/", response_class=HTMLResponse)

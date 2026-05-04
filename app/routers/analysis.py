@@ -1,15 +1,16 @@
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
-from ..database import get_db
+from ..database import SessionLocal, get_db
 from ..models.image import Image
 from ..models.analysis import Analysis
 from ..services.llm_service import llm_service
 from ..services.analysis_parser import build_analysis_artifacts, build_patent_prompt
+from ..services.task_store import task_store
 
 router = APIRouter()
 
@@ -38,6 +39,39 @@ async def analyze_image(
     db: Session = Depends(get_db)
 ):
     """分析图片（基于专利角度）"""
+    return await run_image_analysis(request, db)
+
+
+@router.post("/analyze/async")
+async def enqueue_image_analysis(
+    request: AnalysisRequest,
+    background_tasks: BackgroundTasks,
+):
+    """创建图片分析任务，前端可通过 /tasks/{id} 查询进度。"""
+    task = task_store.create("analysis")
+    background_tasks.add_task(run_analysis_task, task["id"], request)
+    return {
+        "task_id": task["id"],
+        "status": task["status"],
+        "message": "分析任务已创建"
+    }
+
+
+async def run_analysis_task(task_id: str, request: AnalysisRequest) -> None:
+    task_store.mark_running(task_id)
+    db = SessionLocal()
+    try:
+        result = await run_image_analysis(request, db)
+        task_store.mark_completed(task_id, result)
+    except HTTPException as exc:
+        task_store.mark_failed(task_id, str(exc.detail))
+    except Exception as exc:
+        task_store.mark_failed(task_id, str(exc))
+    finally:
+        db.close()
+
+
+async def run_image_analysis(request: AnalysisRequest, db: Session):
     # 查找图片
     image = db.query(Image).filter(Image.id == request.image_id).first()
     if not image:

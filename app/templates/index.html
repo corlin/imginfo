@@ -249,6 +249,27 @@
                 "'": '&#39;'
             }[c]));
         }
+        async function requestJson(url, options) {
+            const response = await fetch(url, options);
+            const data = await response.json();
+            if(!response.ok) {
+                throw new Error(data.detail || data.message || `请求失败: ${response.status}`);
+            }
+            return data;
+        }
+        async function pollTask(taskId, onComplete) {
+            for(let i = 0; i < 180; i++) {
+                const task = await requestJson(`${API_BASE}/tasks/${taskId}`);
+                if(task.status === 'completed') {
+                    return onComplete(task.result);
+                }
+                if(task.status === 'failed') {
+                    throw new Error(task.error || '任务失败');
+                }
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            throw new Error('任务等待超时');
+        }
         function showTab(tab) {
             document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.add('hidden'));
             document.querySelectorAll('[id^="tab-"]').forEach(t => { t.classList.remove('bg-blue-500','text-white'); t.classList.add('text-gray-600'); });
@@ -281,8 +302,8 @@
             selectedImageId = id;
             document.querySelectorAll('#uploaded-grid .card').forEach(c=>c.classList.remove('ring-2','ring-blue-500'));
             el.classList.add('ring-2','ring-blue-500'); showLoading('正在分析...');
-            try { const r = await fetch(`${API_BASE}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_id:id,model_name:'default',patent_focus:'general'})});
-                const d = await r.json(); hideLoading(); currentAnalysisId = d.id; setStep(3); displayAnalysis(d);
+            try { const task = await requestJson(`${API_BASE}/analyze/async`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_id:id,model_name:'default',patent_focus:'general'})});
+                const d = await pollTask(task.task_id, result => result); hideLoading(); currentAnalysisId = d.id; setStep(3); displayAnalysis(d);
             } catch(e) { hideLoading(); alert('分析失败: '+e.message); }
         }
         function displayAnalysis(d) {
@@ -298,8 +319,8 @@
             const prompt = document.getElementById('gen-prompt').value;
             if(!prompt) { alert('请输入生成指令'); return; }
             showLoading('正在生成图片...');
-            try { const r = await fetch(`${API_BASE}/generate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({analysis_id:currentAnalysisId,prompt,style:document.getElementById('style-select').value,width:parseInt(document.getElementById('gen-width').value),height:parseInt(document.getElementById('gen-height').value),num_images:1})});
-                const d = await r.json(); hideLoading(); setStep(4);
+            try { const task = await requestJson(`${API_BASE}/generate/async`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({analysis_id:currentAnalysisId,prompt,style:document.getElementById('style-select').value,width:parseInt(document.getElementById('gen-width').value),height:parseInt(document.getElementById('gen-height').value),num_images:1})});
+                const d = await pollTask(task.task_id, result => result); hideLoading(); setStep(4);
                 document.getElementById('generated-grid').innerHTML = d.generated_images.map(i=>`<div class="card rounded-lg overflow-hidden border"><img src="${escapeHtml(i.url)}" alt="${escapeHtml(i.filename)}" class="w-full h-48 object-cover bg-gray-100"><div class="p-2 text-xs text-gray-500">${i.width}×${i.height}</div></div>`).join('');
             } catch(e) { hideLoading(); alert('生成失败: '+e.message); }
         }

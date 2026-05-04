@@ -1,17 +1,16 @@
 import os
-import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
-from ..database import get_db
-from ..models.image import Image
+from ..database import SessionLocal, get_db
 from ..models.analysis import Analysis
 from ..config import settings
 from ..services.llm_service import llm_service
 from ..services.storage_paths import public_upload_url
+from ..services.task_store import task_store
 
 router = APIRouter()
 
@@ -42,6 +41,39 @@ async def generate_image(
     db: Session = Depends(get_db)
 ):
     """基于分析结果和用户指令生成图片"""
+    return await run_image_generation(request, db)
+
+
+@router.post("/generate/async")
+async def enqueue_image_generation(
+    request: GenerateRequest,
+    background_tasks: BackgroundTasks,
+):
+    """创建图片生成任务，前端可通过 /tasks/{id} 查询进度。"""
+    task = task_store.create("generation")
+    background_tasks.add_task(run_generation_task, task["id"], request)
+    return {
+        "task_id": task["id"],
+        "status": task["status"],
+        "message": "生成任务已创建"
+    }
+
+
+async def run_generation_task(task_id: str, request: GenerateRequest) -> None:
+    task_store.mark_running(task_id)
+    db = SessionLocal()
+    try:
+        result = await run_image_generation(request, db)
+        task_store.mark_completed(task_id, result)
+    except HTTPException as exc:
+        task_store.mark_failed(task_id, str(exc.detail))
+    except Exception as exc:
+        task_store.mark_failed(task_id, str(exc))
+    finally:
+        db.close()
+
+
+async def run_image_generation(request: GenerateRequest, db: Session):
     # 查找分析结果
     analysis = db.query(Analysis).filter(Analysis.id == request.analysis_id).first()
     if not analysis:
