@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     ALLOWED_EXTENSIONS: List[str] = ["jpg", "jpeg", "png", "bmp", "gif", "tiff", "webp"]
     MIN_RESOLUTION: Tuple[int, int] = (100, 100)
     MAX_RESOLUTION: Tuple[int, int] = (8192, 8192)
+    MAX_IMAGE_PIXELS: int = 8192 * 8192
     
     # 文件索引
     INDEX_FILE: str = "file_index.json"

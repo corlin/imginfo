@@ -1,6 +1,8 @@
 import os
 import uuid
 import json
+import logging
+import warnings
 from datetime import datetime
 from typing import List, Optional
 
@@ -14,6 +16,7 @@ from ..models.image import Image
 from ..services.storage_paths import public_upload_url
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def validate_image(file: UploadFile) -> None:
@@ -25,13 +28,29 @@ def validate_image(file: UploadFile) -> None:
             status_code=400,
             detail=f"不支持的文件类型: {ext}。允许的类型: {', '.join(settings.ALLOWED_EXTENSIONS)}"
         )
+    if file.content_type and not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的内容类型: {file.content_type}。请上传图片文件"
+        )
 
 
 def validate_image_content(file_path: str) -> tuple:
     """验证图片内容（分辨率等）"""
     try:
-        with PILImage.open(file_path) as img:
-            width, height = img.size
+        PILImage.MAX_IMAGE_PIXELS = settings.MAX_IMAGE_PIXELS
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", PILImage.DecompressionBombWarning)
+            with PILImage.open(file_path) as img:
+                img.verify()
+            with PILImage.open(file_path) as img:
+                width, height = img.size
+                total_pixels = width * height
+                if total_pixels > settings.MAX_IMAGE_PIXELS:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"图片像素总量 {total_pixels} 超过最大限制 {settings.MAX_IMAGE_PIXELS}"
+                    )
             # 检查分辨率
             if width > settings.MAX_RESOLUTION[0] or height > settings.MAX_RESOLUTION[1]:
                 raise HTTPException(
@@ -68,48 +87,48 @@ def update_file_index(image_data: dict) -> None:
     index_path = os.path.join(settings.UPLOAD_DIR, settings.INDEX_FILE)
     index = []
     if os.path.exists(index_path):
-        with open(index_path, "r") as f:
-            index = json.load(f)
+        try:
+            with open(index_path, "r") as f:
+                index = json.load(f)
+        except json.JSONDecodeError:
+            logger.warning("Ignoring corrupted upload index: %s", index_path)
+            index = []
     index.append(image_data)
-    with open(index_path, "w") as f:
+    tmp_path = f"{index_path}.tmp"
+    with open(tmp_path, "w") as f:
         json.dump(index, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, index_path)
 
 
-@router.post("/upload")
-async def upload_image(
-    file: UploadFile = File(...),
+def cleanup_file(file_path: str) -> None:
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError:
+            logger.warning("Failed to clean invalid upload file: %s", file_path)
+
+
+def get_file_type(filename: Optional[str]) -> str:
+    return filename.split(".")[-1].lower() if filename else "unknown"
+
+
+def create_image_record(
+    db: Session,
+    *,
+    file_path: str,
+    new_filename: str,
+    original_filename: Optional[str],
+    file_size: int,
+    width: int,
+    height: int,
     description: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """上传单张图片"""
-    # 验证文件
-    validate_image(file)
-    
-    # 检查文件大小
-    content = await file.read()
-    if len(content) > settings.MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"文件大小 {len(content)} 字节超过最大限制 {settings.MAX_FILE_SIZE} 字节"
-        )
-    
-    # 生成存储路径
-    file_path, new_filename = generate_storage_path(file.filename or "unknown.jpg")
-    
-    # 保存文件
-    with open(file_path, "wb") as f:
-        f.write(content)
-    
-    # 验证图片内容
-    width, height = validate_image_content(file_path)
-    
-    # 创建数据库记录
+) -> Image:
     db_image = Image(
         filename=new_filename,
-        original_filename=file.filename or "unknown",
+        original_filename=original_filename or "unknown",
         file_path=file_path,
-        file_size=len(content),
-        file_type=file.filename.split(".")[-1].lower() if file.filename else "unknown",
+        file_size=file_size,
+        file_type=get_file_type(original_filename),
         width=width,
         height=height,
         description=description,
@@ -119,24 +138,69 @@ async def upload_image(
     db.add(db_image)
     db.commit()
     db.refresh(db_image)
-    
-    # 更新文件索引
-    update_file_index({
-        "id": db_image.id,
-        "filename": new_filename,
-        "original_filename": file.filename,
-        "file_path": file_path,
-        "upload_time": str(db_image.upload_time)
-    })
+    try:
+        update_file_index({
+            "id": db_image.id,
+            "filename": new_filename,
+            "original_filename": original_filename,
+            "file_path": file_path,
+            "upload_time": str(db_image.upload_time)
+        })
+    except OSError:
+        logger.warning("Upload saved but file index update failed: %s", file_path)
+    return db_image
+
+
+async def store_validated_upload(
+    file: UploadFile,
+    db: Session,
+    description: Optional[str] = None,
+) -> Image:
+    validate_image(file)
+    content = await file.read()
+    if len(content) > settings.MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"文件大小 {len(content)} 字节超过最大限制 {settings.MAX_FILE_SIZE} 字节"
+        )
+
+    file_path, new_filename = generate_storage_path(file.filename or "unknown.jpg")
+    try:
+        with open(file_path, "wb") as f:
+            f.write(content)
+        width, height = validate_image_content(file_path)
+        return create_image_record(
+            db,
+            file_path=file_path,
+            new_filename=new_filename,
+            original_filename=file.filename,
+            file_size=len(content),
+            width=width,
+            height=height,
+            description=description,
+        )
+    except Exception:
+        cleanup_file(file_path)
+        raise
+
+
+@router.post("/upload")
+async def upload_image(
+    file: UploadFile = File(...),
+    description: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """上传单张图片"""
+    db_image = await store_validated_upload(file, db, description)
     
     return {
         "id": db_image.id,
-        "filename": new_filename,
+        "filename": db_image.filename,
         "original_filename": file.filename,
-        "url": public_upload_url(file_path),
-        "file_size": len(content),
-        "width": width,
-        "height": height,
+        "url": public_upload_url(db_image.file_path),
+        "file_size": db_image.file_size,
+        "width": db_image.width,
+        "height": db_image.height,
         "message": "图片上传成功"
     }
 
@@ -152,58 +216,16 @@ async def upload_multiple_images(
     
     for file in files:
         try:
-            # 验证文件
-            validate_image(file)
-            
-            # 检查文件大小
-            content = await file.read()
-            if len(content) > settings.MAX_FILE_SIZE:
-                errors.append({"filename": file.filename, "error": "文件超过大小限制"})
-                continue
-            
-            # 生成存储路径
-            file_path, new_filename = generate_storage_path(file.filename or "unknown.jpg")
-            
-            # 保存文件
-            with open(file_path, "wb") as f:
-                f.write(content)
-            
-            # 验证图片内容
-            width, height = validate_image_content(file_path)
-            
-            # 创建数据库记录
-            db_image = Image(
-                filename=new_filename,
-                original_filename=file.filename or "unknown",
-                file_path=file_path,
-                file_size=len(content),
-                file_type=file.filename.split(".")[-1].lower() if file.filename else "unknown",
-                width=width,
-                height=height,
-                index_key=f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{new_filename}",
-                storage_path=os.path.dirname(file_path)
-            )
-            db.add(db_image)
-            db.commit()
-            db.refresh(db_image)
-            
-            # 更新文件索引
-            update_file_index({
-                "id": db_image.id,
-                "filename": new_filename,
-                "original_filename": file.filename,
-                "file_path": file_path,
-                "upload_time": str(db_image.upload_time)
-            })
+            db_image = await store_validated_upload(file, db)
             
             results.append({
                 "id": db_image.id,
-                "filename": new_filename,
+                "filename": db_image.filename,
                 "original_filename": file.filename,
-                "url": public_upload_url(file_path),
-                "file_size": len(content),
-                "width": width,
-                "height": height
+                "url": public_upload_url(db_image.file_path),
+                "file_size": db_image.file_size,
+                "width": db_image.width,
+                "height": db_image.height
             })
         except Exception as e:
             errors.append({"filename": file.filename, "error": str(e)})
