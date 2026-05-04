@@ -192,6 +192,37 @@ async def get_available_styles():
     }
 
 
+@router.get("/generate/history")
+async def list_generated_images(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """获取已生成图片列表，供前端review。"""
+    query = db.query(Analysis).filter(Analysis.generated_image_path.isnot(None))
+    analyses = query.order_by(Analysis.updated_at.desc(), Analysis.created_at.desc()).offset(skip).limit(limit).all()
+    return {
+        "total": query.count(),
+        "generated_images": [
+            generated_image_record(analysis)
+            for analysis in analyses
+        ],
+    }
+
+
+def generated_image_record(analysis: Analysis) -> dict:
+    path = analysis.generated_image_path or ""
+    return {
+        "analysis_id": analysis.id,
+        "image_id": analysis.image_id,
+        "filename": os.path.basename(path),
+        "file_path": path,
+        "url": public_upload_url(path),
+        "prompt": analysis.generation_prompt or "",
+        "created_at": str(analysis.updated_at or analysis.created_at),
+    }
+
+
 @router.get("/generate/models")
 async def get_available_models():
     """获取可用的生成模型"""
