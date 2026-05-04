@@ -2,7 +2,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.config import settings
-from app.routers.settings_router import APIConfigUpdate, apply_api_config
+from app.routers.settings_router import APIConfigUpdate, apply_api_config, get_current_settings
 from app.services.llm_service import llm_service
 
 
@@ -84,6 +84,42 @@ def test_placeholder_api_key_is_not_configured():
 
         assert llm_service.get_config_info()["api_key_configured"] is False
         assert llm_service._has_valid_api_key() is False
+    finally:
+        for key, value in previous.items():
+            setattr(settings, key, value)
+        llm_service.refresh_config()
+
+
+@pytest.mark.asyncio
+async def test_current_settings_reports_effective_env_models_for_aliyun():
+    previous = {
+        "API_PROVIDER": settings.API_PROVIDER,
+        "CUSTOM_API_BASE": settings.CUSTOM_API_BASE,
+        "CUSTOM_API_KEY": settings.CUSTOM_API_KEY,
+        "CUSTOM_VISION_MODEL": settings.CUSTOM_VISION_MODEL,
+        "CUSTOM_IMAGE_MODEL": settings.CUSTOM_IMAGE_MODEL,
+        "OPENAI_VISION_MODEL": settings.OPENAI_VISION_MODEL,
+        "OPENAI_IMAGE_MODEL": settings.OPENAI_IMAGE_MODEL,
+    }
+    try:
+        settings.API_PROVIDER = "aliyun"
+        settings.CUSTOM_API_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        settings.CUSTOM_API_KEY = "sk-realistic-test-key"
+        settings.CUSTOM_VISION_MODEL = "qwen-vl-max"
+        settings.CUSTOM_IMAGE_MODEL = "wanx-v1"
+        settings.OPENAI_VISION_MODEL = "gpt-4-vision-preview"
+        settings.OPENAI_IMAGE_MODEL = "dall-e-3"
+        llm_service.refresh_config()
+
+        current = await get_current_settings()
+
+        assert current["api"]["provider"] == "aliyun"
+        assert current["api"]["api_key_configured"] is True
+        assert current["api"]["active_vision_model"] == "qwen-vl-max"
+        assert current["api"]["active_image_model"] == "wanx-v1"
+        assert current["llm_config"]["vision_model"] == "qwen-vl-max"
+        assert current["llm_config"]["image_model"] == "wanx-v1"
+        assert current["api"]["active_api_key_masked"].startswith("sk-reali")
     finally:
         for key, value in previous.items():
             setattr(settings, key, value)

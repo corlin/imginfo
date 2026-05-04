@@ -414,10 +414,13 @@
                 const r = await fetch(`${API_BASE}/settings/current`);
                 const d = await r.json();
                 // 填充当前配置
-                document.getElementById('settings-provider').value = d.api.provider || 'openai';
-                document.getElementById('settings-baseurl').value = d.api.custom_api_base !== '未配置' ? d.api.custom_api_base : d.api.openai_api_base;
-                document.getElementById('settings-vision-model').value = d.api.openai_vision_model;
-                document.getElementById('settings-image-model').value = d.api.openai_image_model;
+                const active = d.llm_config || {};
+                document.getElementById('settings-provider').value = active.provider || d.api.provider || 'openai';
+                document.getElementById('settings-apikey').value = '';
+                document.getElementById('settings-apikey').placeholder = active.api_key_configured ? `已配置：${active.api_key_preview}（留空保持不变）` : '输入API Key';
+                document.getElementById('settings-baseurl').value = active.api_base || d.api.active_api_base || '';
+                document.getElementById('settings-vision-model').value = active.vision_model || d.api.active_vision_model || '';
+                document.getElementById('settings-image-model').value = active.image_model || d.api.active_image_model || '';
                 document.getElementById('settings-max-size').value = d.upload.max_file_size_mb;
                 document.getElementById('settings-extensions').value = d.upload.allowed_extensions.join(',');
                 document.getElementById('settings-min-w').value = d.upload.min_resolution[0];
@@ -428,8 +431,8 @@
                 document.getElementById('settings-img-quality').value = d.image.image_quality;
                 document.getElementById('settings-vision-tokens').value = d.image.vision_max_tokens;
                 // API状态
-                document.getElementById('api-status-text').textContent = d.api.api_key_configured ? `✅ 已配置 (${d.api.provider})` : '❌ 未配置';
-                document.getElementById('api-status-text').className = d.api.api_key_configured ? 'font-medium text-green-600' : 'font-medium text-red-600';
+                document.getElementById('api-status-text').textContent = active.api_key_configured ? `✅ 已配置 (${active.provider}) · ${active.vision_model} / ${active.image_model}` : `❌ 未配置 (${active.provider || d.api.provider})`;
+                document.getElementById('api-status-text').className = active.api_key_configured ? 'font-medium text-green-600' : 'font-medium text-red-600';
             } catch(e) {
                 console.error('加载设置失败:', e);
             }

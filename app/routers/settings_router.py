@@ -68,19 +68,24 @@ def apply_api_config(update: APIConfigUpdate) -> dict:
     return llm_service.get_config_info()
 
 
+def mask_key(key: str) -> str:
+    if not key or key.startswith("your_"):
+        return "未配置"
+    return key[:8] + "****" + key[-4:] if len(key) > 12 else "****"
+
+
 @router.get("/current")
 async def get_current_settings():
     """获取当前所有配置（前端展示用，隐藏敏感信息）"""
-    def mask_key(key: str) -> str:
-        if not key or key.startswith("your_"):
-            return "未配置"
-        return key[:8] + "****" + key[-4:] if len(key) > 12 else "****"
-    
-    active_key = settings.CUSTOM_API_KEY if settings.API_PROVIDER == "custom" else settings.OPENAI_API_KEY
+    llm_config = llm_service.get_config_info()
     
     return {
         "api": {
             "provider": settings.API_PROVIDER,
+            "active_api_base": llm_config["api_base"],
+            "active_vision_model": llm_config["vision_model"],
+            "active_image_model": llm_config["image_model"],
+            "active_api_key_masked": llm_config["api_key_preview"] or "未配置",
             "openai_api_base": settings.OPENAI_API_BASE,
             "openai_api_key_masked": mask_key(settings.OPENAI_API_KEY),
             "openai_vision_model": settings.OPENAI_VISION_MODEL,
@@ -89,7 +94,7 @@ async def get_current_settings():
             "custom_api_key_masked": mask_key(settings.CUSTOM_API_KEY),
             "custom_vision_model": settings.CUSTOM_VISION_MODEL or "使用默认",
             "custom_image_model": settings.CUSTOM_IMAGE_MODEL or "使用默认",
-            "api_key_configured": bool(active_key) and not active_key.startswith("your_"),
+            "api_key_configured": llm_config["api_key_configured"],
         },
         "upload": {
             "max_file_size": settings.MAX_FILE_SIZE,
@@ -105,7 +110,7 @@ async def get_current_settings():
             "vision_max_tokens": settings.VISION_MAX_TOKENS,
             "vision_detail": settings.VISION_DETAIL,
         },
-        "llm_config": llm_service.get_config_info(),
+        "llm_config": llm_config,
     }
 
 
@@ -174,10 +179,10 @@ async def update_api_settings(update: APIConfigUpdate):
 @router.post("/test-connection")
 async def test_api_connection():
     """测试当前API连接是否可用"""
-    api_key = settings.CUSTOM_API_KEY or settings.OPENAI_API_KEY
-    api_base = settings.CUSTOM_API_BASE or settings.OPENAI_API_BASE
+    api_key = llm_service.api_key
+    api_base = llm_service.api_base
     
-    if not api_key:
+    if not llm_service._has_valid_api_key():
         return {
             "success": False,
             "message": "API Key未配置，请先在设置中配置API Key",
