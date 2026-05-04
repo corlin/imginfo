@@ -1,5 +1,6 @@
 import os
 from typing import List, Tuple
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -55,9 +56,7 @@ class Settings(BaseSettings):
     IMAGE_QUALITY: str = "standard"  # standard, hd
     IMAGE_STYLE: str = "natural"  # natural, vivid
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = ConfigDict(env_file=".env", case_sensitive=True)
 
 
 # 创建全局设置实例
