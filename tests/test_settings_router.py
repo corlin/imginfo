@@ -72,6 +72,41 @@ def test_openai_provider_ignores_stale_custom_base():
         llm_service.refresh_config()
 
 
+def test_apply_api_config_updates_runtime_openrouter_provider():
+    previous = {
+        "API_PROVIDER": settings.API_PROVIDER,
+        "OPENROUTER_API_BASE": settings.OPENROUTER_API_BASE,
+        "OPENROUTER_API_KEY": settings.OPENROUTER_API_KEY,
+        "OPENROUTER_VISION_MODEL": settings.OPENROUTER_VISION_MODEL,
+        "OPENROUTER_IMAGE_MODEL": settings.OPENROUTER_IMAGE_MODEL,
+        "CUSTOM_API_BASE": settings.CUSTOM_API_BASE,
+        "CUSTOM_API_KEY": settings.CUSTOM_API_KEY,
+    }
+    try:
+        settings.CUSTOM_API_BASE = "https://stale-custom.test/v1"
+        settings.CUSTOM_API_KEY = "stale-custom-key"
+        config = apply_api_config(
+            APIConfigUpdate(
+                api_provider="openrouter",
+                openrouter_api_base="https://openrouter.ai/api/v1",
+                openrouter_api_key="sk-or-test-key",
+                openrouter_vision_model="openai/gpt-5.4-image-2",
+                openrouter_image_model="openai/gpt-5.4-image-2",
+            )
+        )
+
+        assert settings.API_PROVIDER == "openrouter"
+        assert config["provider"] == "openrouter"
+        assert config["api_base"] == "https://openrouter.ai/api/v1"
+        assert config["vision_model"] == "openai/gpt-5.4-image-2"
+        assert config["image_model"] == "openai/gpt-5.4-image-2"
+        assert config["api_key_configured"] is True
+    finally:
+        for key, value in previous.items():
+            setattr(settings, key, value)
+        llm_service.refresh_config()
+
+
 def test_placeholder_api_key_is_not_configured():
     previous = {
         "API_PROVIDER": settings.API_PROVIDER,

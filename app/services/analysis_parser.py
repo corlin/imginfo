@@ -8,6 +8,14 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 class PatentImageAnalysis(BaseModel):
     image_type: str = "未知"
     content_description: str = ""
+    scene_context: str = "需结合图片来源或业务场景确认"
+    technical_domain: str = "未知"
+    visible_evidence: List[str] = Field(default_factory=list)
+    inferred_context: List[str] = Field(default_factory=list)
+    uncertainties: List[str] = Field(default_factory=list)
+    context_alignment: str = "未提供用户上下文，无法进行上下文对齐"
+    context_supported_points: List[str] = Field(default_factory=list)
+    context_gaps: List[str] = Field(default_factory=list)
     components: List[str] = Field(default_factory=list)
     relationships: List[str] = Field(default_factory=list)
     technical_field: str = "未知"
@@ -23,6 +31,11 @@ class PatentImageAnalysis(BaseModel):
     @field_validator(
         "components",
         "relationships",
+        "visible_evidence",
+        "inferred_context",
+        "uncertainties",
+        "context_supported_points",
+        "context_gaps",
         "technical_features",
         "key_elements",
         "novelty_points",
@@ -40,17 +53,36 @@ class PatentImageAnalysis(BaseModel):
         return [str(value)]
 
 
-def build_patent_prompt(focus_type: str) -> str:
+def build_patent_prompt(focus_type: str, user_context: str = "") -> str:
+    context_block = ""
+    if user_context.strip():
+        context_block = f"""
+用户提供的确定性上下文如下，请将其作为输入材料使用，而不是作为模型推断输出：
+---
+{user_context.strip()}
+---
+"""
+
     return f"""请从专利申请准备的角度分析这张图片，重点关注{focus_type}类型的专利。
+{context_block}
 
 重要边界：
 1. 只能基于图片可见内容描述技术事实，不要编造图中不存在的结构或步骤。
 2. 未进行现有技术检索时，不要断言“具有新颖性/创造性”。
-3. 请区分“可见事实”“合理推断”“待人工确认/待检索风险”。
+3. 如果用户提供了专利原文、权利要求、说明书片段或业务场景，请把它当作确定性上下文输入。
+4. 请区分“图片可见事实”“用户上下文支持的点”“图片与上下文不一致或待人工确认的点”。
 
 请仅以JSON格式输出以下内容：
 {{
     "image_type": "图片类型（技术图纸、流程图、结构图、照片等）",
+    "scene_context": "仅当用户上下文中明确给出场景时填写，否则说明未提供确定场景",
+    "technical_domain": "可能所属技术领域",
+    "visible_evidence": ["图片中直接可见、可支撑判断的事实"],
+    "context_alignment": "图片内容与用户上下文/专利文本的整体对应关系",
+    "context_supported_points": ["图片直接支持用户上下文中的哪些技术点"],
+    "context_gaps": ["用户上下文提到但图片无法确认、缺失或存在不一致的点"],
+    "inferred_context": ["必要时列出基于图片的有限推断，必须说明为推断"],
+    "uncertainties": ["仅凭图片无法确认、需要用户补充或人工核查的信息"],
     "content_description": "图片主要内容的详细描述",
     "components": ["可见组件1", "可见组件2"],
     "relationships": ["组件A与组件B的可见连接或功能关系"],
@@ -84,10 +116,19 @@ def parse_llm_analysis(raw_output: Any) -> PatentImageAnalysis:
 def build_analysis_artifacts(
     raw_output: Any,
     claim_type: str,
+    user_context: str = "",
 ) -> Dict[str, Any]:
     parsed = parse_llm_analysis(raw_output)
+    image_context = _build_image_context(parsed)
 
     structured_result = {
+        "user_context": user_context.strip(),
+        "image_context": image_context,
+        "context_analysis": {
+            "alignment": parsed.context_alignment,
+            "supported_points": parsed.context_supported_points,
+            "gaps": parsed.context_gaps,
+        },
         "image_type": parsed.image_type,
         "content_description": parsed.content_description,
         "components": parsed.components,
@@ -131,6 +172,8 @@ def _validate_analysis(data: Dict[str, Any]) -> PatentImageAnalysis:
         data = {**data, "content_description": data["main_content"]}
     if "risk_flags" not in data and "patent_suggestions" in data:
         data = {**data, "risk_flags": [data["patent_suggestions"]]}
+    if "technical_domain" not in data and "technical_field" in data:
+        data = {**data, "technical_domain": data["technical_field"]}
     return PatentImageAnalysis.model_validate(data)
 
 
@@ -153,6 +196,35 @@ def _build_technical_description(parsed: PatentImageAnalysis) -> str:
         f"图片可能涉及{parsed.technical_field}领域，包含{components}。"
         f"可见关系包括：{relationships}。"
     )
+
+
+def _build_image_context(parsed: PatentImageAnalysis) -> Dict[str, Any]:
+    visible_evidence = parsed.visible_evidence or []
+    if not visible_evidence:
+        visible_evidence = parsed.components + parsed.relationships
+    if not visible_evidence and parsed.content_description:
+        visible_evidence = [parsed.content_description]
+
+    uncertainties = parsed.uncertainties or []
+    if parsed.risk_flags:
+        uncertainties = uncertainties + [
+            flag for flag in parsed.risk_flags if flag not in uncertainties
+        ]
+    if not uncertainties:
+        uncertainties = ["图片来源、使用场景和现有技术差异仍需人工确认"]
+
+    technical_domain = parsed.technical_domain
+    if technical_domain == "未知" and parsed.technical_field != "未知":
+        technical_domain = parsed.technical_field
+
+    return {
+        "scene": parsed.scene_context,
+        "image_type": parsed.image_type,
+        "technical_domain": technical_domain,
+        "visible_evidence": visible_evidence,
+        "inferred_context": parsed.inferred_context,
+        "uncertainties": uncertainties,
+    }
 
 
 def _build_patentability_note(parsed: PatentImageAnalysis) -> str:

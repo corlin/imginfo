@@ -19,6 +19,7 @@ class AnalysisRequest(BaseModel):
     image_id: int
     model_name: Optional[str] = "gpt-4-vision-preview"
     patent_focus: Optional[str] = "general"  # general, apparatus, method, composition
+    user_context: Optional[str] = None
     custom_prompt: Optional[str] = None
 
 
@@ -93,7 +94,7 @@ async def run_image_analysis(request: AnalysisRequest, db: Session):
         }
         focus_type = patent_focus_map.get(request.patent_focus, "通用")
         
-        prompt = build_patent_prompt(focus_type)
+        prompt = build_patent_prompt(focus_type, request.user_context or "")
     
     # 调用LLM Vision API进行分析
     llm_result = await llm_service.analyze_image(image.file_path, prompt)
@@ -102,7 +103,11 @@ async def run_image_analysis(request: AnalysisRequest, db: Session):
         raise HTTPException(status_code=500, detail=f"图片分析失败: {llm_result.get('error', '未知错误')}")
     
     raw_output = llm_result["analysis"]
-    artifacts = build_analysis_artifacts(raw_output, request.patent_focus or "general")
+    artifacts = build_analysis_artifacts(
+        raw_output,
+        request.patent_focus or "general",
+        request.user_context or "",
+    )
     structured_result = artifacts["structured_result"]
     patent_elements = artifacts["patent_elements"]
     technical_description = artifacts["technical_description"]

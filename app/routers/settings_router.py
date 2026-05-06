@@ -8,7 +8,7 @@ from ..config import settings
 from ..services.llm_service import llm_service
 
 router = APIRouter(prefix="/settings", tags=["settings"])
-SUPPORTED_PROVIDERS = {"openai", "azure", "xiaomi_mimo", "aliyun", "zhipu", "baidu", "custom"}
+SUPPORTED_PROVIDERS = {"openai", "openrouter", "azure", "xiaomi_mimo", "aliyun", "zhipu", "baidu", "custom"}
 
 
 class APIConfigUpdate(BaseModel):
@@ -22,6 +22,10 @@ class APIConfigUpdate(BaseModel):
     openai_api_base: Optional[str] = None
     openai_vision_model: Optional[str] = None
     openai_image_model: Optional[str] = None
+    openrouter_api_key: Optional[str] = None
+    openrouter_api_base: Optional[str] = None
+    openrouter_vision_model: Optional[str] = None
+    openrouter_image_model: Optional[str] = None
 
 
 class UploadConfigUpdate(BaseModel):
@@ -59,6 +63,10 @@ def apply_api_config(update: APIConfigUpdate) -> dict:
         "openai_api_base": "OPENAI_API_BASE",
         "openai_vision_model": "OPENAI_VISION_MODEL",
         "openai_image_model": "OPENAI_IMAGE_MODEL",
+        "openrouter_api_key": "OPENROUTER_API_KEY",
+        "openrouter_api_base": "OPENROUTER_API_BASE",
+        "openrouter_vision_model": "OPENROUTER_VISION_MODEL",
+        "openrouter_image_model": "OPENROUTER_IMAGE_MODEL",
     }
     for request_field, settings_field in field_map.items():
         if request_field in data and data[request_field] is not None:
@@ -90,6 +98,10 @@ async def get_current_settings():
             "openai_api_key_masked": mask_key(settings.OPENAI_API_KEY),
             "openai_vision_model": settings.OPENAI_VISION_MODEL,
             "openai_image_model": settings.OPENAI_IMAGE_MODEL,
+            "openrouter_api_base": settings.OPENROUTER_API_BASE,
+            "openrouter_api_key_masked": mask_key(settings.OPENROUTER_API_KEY),
+            "openrouter_vision_model": settings.OPENROUTER_VISION_MODEL,
+            "openrouter_image_model": settings.OPENROUTER_IMAGE_MODEL,
             "custom_api_base": settings.CUSTOM_API_BASE or "未配置",
             "custom_api_key_masked": mask_key(settings.CUSTOM_API_KEY),
             "custom_vision_model": settings.CUSTOM_VISION_MODEL or "使用默认",
@@ -124,6 +136,12 @@ async def get_available_providers():
                 "name": "OpenAI",
                 "description": "OpenAI官方API",
                 "default_base": "https://api.openai.com/v1",
+            },
+            {
+                "id": "openrouter",
+                "name": "OpenRouter",
+                "description": "OpenRouter聚合模型，支持GPT Image 2等SOTA图片模型",
+                "default_base": "https://openrouter.ai/api/v1",
             },
             {
                 "id": "azure",

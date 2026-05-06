@@ -66,7 +66,16 @@
                 <div id="step2-panel" class="hidden">
                     <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
                         <h2 class="text-lg font-semibold mb-4">选择图片进行专利分析</h2>
+                        <div class="mb-5">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">专利原文 / 上下文材料</label>
+                            <textarea id="analysis-context" rows="5" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="可粘贴权利要求、说明书片段、技术交底或图片来源说明。模型会把这里作为确定性输入上下文，并判断图片与文本的对应关系。"></textarea>
+                        </div>
                         <div id="uploaded-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"></div>
+                        <div id="selected-image-summary" class="hidden bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-800 mb-4"></div>
+                        <div class="flex justify-end gap-3">
+                            <button onclick="setStep(1)" class="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">返回上传</button>
+                            <button onclick="startAnalysis()" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">开始分析</button>
+                        </div>
                     </div>
                 </div>
                 <div id="step3-panel" class="hidden">
@@ -79,8 +88,25 @@
                             <h2 class="text-lg font-semibold mb-4">图片生成</h2>
                             <div class="space-y-4">
                                 <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">生成模式</label>
+                                    <select id="generation-mode" onchange="onGenerationModeChange(); resetEditPlanPreview();" class="w-full border rounded-lg px-3 py-2">
+                                        <option value="preserve_style" selected>保持原图风格优化</option>
+                                        <option value="technical_illustration">生成新的技术插图</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">执行方式</label>
+                                    <select id="executor-select" onchange="onExecutorChange(); resetEditPlanPreview()" class="w-full border rounded-lg px-3 py-2">
+                                        <option value="cloud_image_to_image" selected>云端图生图服务</option>
+                                        <option value="auto">自动选择</option>
+                                        <option value="local_high_fidelity">本地保真增强</option>
+                                        <option value="cloud_text_to_image">云端文生图服务</option>
+                                    </select>
+                                    <p id="executor-hint" class="mt-1 text-xs text-gray-500">默认调用云端图生图服务；本地保真增强只做清晰度增强，不会调用外部生成模型。</p>
+                                </div>
+                                <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">生成风格</label>
-                                    <select id="style-select" class="w-full border rounded-lg px-3 py-2">
+                                    <select id="style-select" onchange="resetEditPlanPreview()" class="w-full border rounded-lg px-3 py-2">
                                         <option value="realistic">写实风格</option>
                                         <option value="sketch">草图风格</option>
                                         <option value="technical">技术图纸</option>
@@ -91,13 +117,18 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">优化指令</label>
-                                    <textarea id="gen-prompt" rows="4" class="w-full border rounded-lg px-3 py-2" placeholder="输入生成指令..."></textarea>
+                                    <textarea id="gen-prompt" rows="4" oninput="resetEditPlanPreview()" class="w-full border rounded-lg px-3 py-2" placeholder="输入生成指令..."></textarea>
                                 </div>
                                 <div class="grid grid-cols-2 gap-4">
-                                    <div><label class="block text-sm font-medium text-gray-700 mb-1">宽度</label><input type="number" id="gen-width" value="512" class="w-full border rounded-lg px-3 py-2"></div>
-                                    <div><label class="block text-sm font-medium text-gray-700 mb-1">高度</label><input type="number" id="gen-height" value="512" class="w-full border rounded-lg px-3 py-2"></div>
+                                    <div><label class="block text-sm font-medium text-gray-700 mb-1">宽度</label><input type="number" id="gen-width" value="512" onchange="resetEditPlanPreview()" class="w-full border rounded-lg px-3 py-2"></div>
+                                    <div><label class="block text-sm font-medium text-gray-700 mb-1">高度</label><input type="number" id="gen-height" value="512" onchange="resetEditPlanPreview()" class="w-full border rounded-lg px-3 py-2"></div>
                                 </div>
-                                <button onclick="generateImage()" class="w-full px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">🎨 生成图片</button>
+                                <div id="edit-plan-preview" class="hidden"></div>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <button onclick="previewEditPlan('local')" class="w-full px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium">快速计划</button>
+                                    <button onclick="previewEditPlan('ai')" class="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">AI计划</button>
+                                    <button id="generate-button" onclick="generateImage()" class="hidden w-full px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">确认执行</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -149,6 +180,7 @@
                                 <label class="block text-sm font-medium text-gray-700 mb-1">API提供商</label>
                                 <select id="settings-provider" onchange="onProviderChange()" class="w-full border rounded-lg px-3 py-2">
                                     <option value="openai">OpenAI</option>
+                                    <option value="openrouter">OpenRouter</option>
                                     <option value="xiaomi_mimo">小米MIMO</option>
                                     <option value="aliyun">阿里云通义千问</option>
                                     <option value="zhipu">智谱AI</option>
@@ -267,7 +299,7 @@
     </div>
     <script>
         const API_BASE = '/api/v1';
-        let uploadedFiles = [], selectedImageId = null, currentAnalysisId = null;
+        let uploadedFiles = [], selectedImageId = null, currentAnalysisId = null, currentEditPlan = null;
         function escapeHtml(value) {
             return String(value ?? '').replace(/[&<>"']/g, c => ({
                 '&': '&amp;',
@@ -308,52 +340,179 @@
         function handleFiles(files) {
             const g = document.getElementById('preview-grid'); g.innerHTML = '';
             uploadedFiles = Array.from(files);
-            files.forEach(f => { const r = new FileReader(); r.onload = e => { g.innerHTML += `<div class="rounded-lg overflow-hidden border"><img src="${e.target.result}" alt="${escapeHtml(f.name)}" class="w-full h-32 object-cover"><div class="p-2 text-xs text-gray-500 truncate">${escapeHtml(f.name)}</div></div>`; }; r.readAsDataURL(f); });
+            uploadedFiles.forEach(f => { const r = new FileReader(); r.onload = e => { g.innerHTML += `<div class="rounded-lg overflow-hidden border"><img src="${e.target.result}" alt="${escapeHtml(f.name)}" class="w-full h-32 object-cover"><div class="p-2 text-xs text-gray-500 truncate">${escapeHtml(f.name)}</div></div>`; }; r.readAsDataURL(f); });
             document.getElementById('preview-area').classList.remove('hidden');
         }
         async function uploadAll() {
             if(!uploadedFiles.length) return; showLoading('正在上传...');
             const fd = new FormData(); uploadedFiles.forEach(f => fd.append('files', f));
-            try { const r = await fetch(`${API_BASE}/upload/multiple`,{method:'POST',body:fd}); const d = await r.json(); hideLoading();
-                if(d.results?.length) { setStep(2); loadUploadedImages(d.results); }
-                if(d.errors?.length) alert('部分上传失败: '+d.errors.map(e=>e.error).join(', '));
+            try {
+                const d = await requestJson(`${API_BASE}/upload/multiple`,{method:'POST',body:fd});
+                hideLoading();
+                if(d.results?.length) {
+                    setStep(2);
+                    await loadUploadedImages(d.results);
+                }
+                if(d.errors?.length) {
+                    const details = d.errors.map(e => `${e.filename || '未知文件'}: ${e.error}`).join('\n');
+                    alert((d.results?.length ? '部分上传失败:\n' : '上传失败:\n') + details);
+                }
+                if(!d.results?.length && !d.errors?.length) {
+                    alert('上传失败：服务器未返回上传结果');
+                }
             } catch(e) { hideLoading(); alert('上传失败: '+e.message); }
         }
         async function loadUploadedImages(results) {
             const g = document.getElementById('uploaded-grid'); g.innerHTML = '';
             for(const r of results) {
                 const res = await fetch(`${API_BASE}/images/${r.id}`); const img = await res.json();
-                g.innerHTML += `<div class="card rounded-lg overflow-hidden border cursor-pointer" onclick="selectImage(${img.id},this)"><img src="${escapeHtml(img.url)}" alt="${escapeHtml(img.original_filename)}" class="w-full h-32 object-cover bg-gray-100"><div class="p-2"><p class="text-xs text-gray-500 truncate">${escapeHtml(img.original_filename)}</p><p class="text-xs text-gray-400">${img.width}×${img.height} · ${(img.file_size/1024).toFixed(1)}KB</p></div></div>`;
+                g.innerHTML += `<div class="card rounded-lg overflow-hidden border cursor-pointer" data-filename="${escapeHtml(img.original_filename)}" data-meta="${img.width}×${img.height} · ${(img.file_size/1024).toFixed(1)}KB" onclick="selectImage(${img.id},this)"><img src="${escapeHtml(img.url)}" alt="${escapeHtml(img.original_filename)}" class="w-full h-32 object-cover bg-gray-100"><div class="p-2"><p class="text-xs text-gray-500 truncate">${escapeHtml(img.original_filename)}</p><p class="text-xs text-gray-400">${img.width}×${img.height} · ${(img.file_size/1024).toFixed(1)}KB</p></div></div>`;
             }
         }
-        async function selectImage(id, el) {
+        function selectImage(id, el) {
             selectedImageId = id;
             document.querySelectorAll('#uploaded-grid .card').forEach(c=>c.classList.remove('ring-2','ring-blue-500'));
-            el.classList.add('ring-2','ring-blue-500'); showLoading('正在分析...');
-            try { const task = await requestJson(`${API_BASE}/analyze/async`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_id:id,model_name:'default',patent_focus:'general'})});
+            el.classList.add('ring-2','ring-blue-500');
+            const summary = document.getElementById('selected-image-summary');
+            summary.textContent = `已选择：${el.dataset.filename || `图片 #${id}`} · ${el.dataset.meta || ''}`;
+            summary.classList.remove('hidden');
+        }
+        async function startAnalysis() {
+            if(!selectedImageId) { alert('请先选择一张图片'); return; }
+            showLoading('正在分析...');
+            const userContext = document.getElementById('analysis-context')?.value || '';
+            try { const task = await requestJson(`${API_BASE}/analyze/async`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_id:selectedImageId,model_name:'default',patent_focus:'general',user_context:userContext})});
                 const d = await pollTask(task.task_id, result => result); hideLoading(); currentAnalysisId = d.id; setStep(3); displayAnalysis(d);
             } catch(e) { hideLoading(); alert('分析失败: '+e.message); }
         }
         function displayAnalysis(d) {
+            const context = d.structured_result?.image_context || {};
+            const userContext = d.structured_result?.user_context || '';
+            const contextAnalysis = d.structured_result?.context_analysis || {};
+            const visibleEvidence = context.visible_evidence || d.structured_result?.components || [];
+            const supportedPoints = contextAnalysis.supported_points || [];
+            const contextGaps = contextAnalysis.gaps || context.uncertainties || d.structured_result?.risk_flags || [];
+            const contextList = (items, emptyText) => {
+                const values = Array.isArray(items) ? items.filter(Boolean) : [];
+                if(!values.length) return `<li>${escapeHtml(emptyText)}</li>`;
+                return values.map(item => `<li>• ${escapeHtml(item)}</li>`).join('');
+            };
             document.getElementById('analysis-result').innerHTML = `
+                <div class="bg-indigo-50 rounded-lg p-4">
+                    <h3 class="font-medium text-indigo-800 mb-2">输入上下文与图片对齐</h3>
+                    <div class="text-sm text-gray-700 space-y-2">
+                        <div><b>输入上下文:</b><p class="mt-1 whitespace-pre-line">${escapeHtml(userContext || '未提供专利原文或确定性上下文，本次仅基于图片分析。')}</p></div>
+                        <p><b>对齐判断:</b> ${escapeHtml(contextAnalysis.alignment || '未提供用户上下文，无法进行上下文对齐')}</p>
+                        <p><b>类型:</b> ${escapeHtml(context.image_type || d.structured_result?.image_type || '未知')} · <b>领域:</b> ${escapeHtml(context.technical_domain || d.structured_result?.technical_field || '未知')}</p>
+                        <div><b>可见事实:</b><ul class="mt-1 space-y-1">${contextList(visibleEvidence, '模型未提取到明确可见事实，需人工复核图片。')}</ul></div>
+                        <div><b>文本支持点:</b><ul class="mt-1 space-y-1">${contextList(supportedPoints, '未提供文本上下文，或图片尚未明确支撑文本中的具体技术点。')}</ul></div>
+                        <div><b>缺口 / 不一致:</b><ul class="mt-1 space-y-1">${contextList(contextGaps, '暂未发现明确缺口，但仍需人工复核图片与文本的一致性。')}</ul></div>
+                    </div>
+                </div>
                 <div class="bg-blue-50 rounded-lg p-4"><h3 class="font-medium text-blue-800 mb-2">技术描述</h3><p class="text-sm text-gray-700">${escapeHtml(d.technical_description)}</p></div>
                 <div class="bg-green-50 rounded-lg p-4"><h3 class="font-medium text-green-800 mb-2">关键特征</h3><ul class="text-sm text-gray-700 space-y-1">${d.key_features.map(f=>`<li>• ${escapeHtml(f)}</li>`).join('')}</ul></div>
                 <div class="bg-purple-50 rounded-lg p-4"><h3 class="font-medium text-purple-800 mb-2">专利要素</h3><div class="text-sm text-gray-700 space-y-1"><p><b>标题:</b> ${escapeHtml(d.patent_elements.title)}</p><p><b>技术问题:</b> ${escapeHtml(d.patent_elements.technical_problem)}</p><p><b>解决方案:</b> ${escapeHtml(d.patent_elements.solution)}</p><p><b>优势:</b> ${escapeHtml(d.patent_elements.advantage)}</p></div></div>
                 <div class="bg-yellow-50 rounded-lg p-4"><h3 class="font-medium text-yellow-800 mb-2">新颖性分析</h3><p class="text-sm text-gray-700 whitespace-pre-line">${escapeHtml(d.novelty_analysis)}</p></div>`;
-            document.getElementById('gen-prompt').value = `基于专利分析，请生成${d.patent_elements.title}的详细技术插图，突出以下特征：${d.key_features.join('、')}`;
+            document.getElementById('gen-prompt').value = `在不改变原图整体风格、布局和视觉语言的前提下，优化图片表达，使其更清晰地体现：${d.key_features.join('、')}`;
+            onGenerationModeChange();
+        }
+        function onGenerationModeChange() {
+            const mode = document.getElementById('generation-mode')?.value || 'preserve_style';
+            const executor = document.getElementById('executor-select');
+            const hint = document.getElementById('executor-hint');
+            if(executor) executor.value = mode === 'technical_illustration' ? 'cloud_text_to_image' : 'cloud_image_to_image';
+            if(hint) hint.textContent = mode === 'technical_illustration'
+                ? '当前将调用云端文生图服务，基于分析结果重新生成新的技术插图。'
+                : '当前将调用云端图生图服务，参考原图并按编辑计划执行修改。';
+            const prompt = document.getElementById('gen-prompt');
+            if(prompt && !prompt.value.trim()) {
+                prompt.placeholder = mode === 'preserve_style'
+                    ? '描述要在原图基础上增加或优化的修改项，系统会优先保持原图风格、布局和可见事实。'
+                    : '描述要生成的新技术插图，系统会参考分析结果重新组织为专利插图。';
+            }
+        }
+        function onExecutorChange() {
+            const executor = document.getElementById('executor-select')?.value || 'cloud_image_to_image';
+            const hint = document.getElementById('executor-hint');
+            if(!hint) return;
+            const hints = {
+                cloud_image_to_image: '当前将调用云端图生图服务，参考原图并按编辑计划执行修改。',
+                cloud_text_to_image: '当前将调用云端文生图服务，基于分析结果重新生成新的技术插图。',
+                local_high_fidelity: '当前只做本地保真增强，不调用外部生成模型，适合文字密集截图的清晰度兜底。',
+                auto: '系统会根据图片类型自动选择；UI/文字密集图可能走本地保真增强。'
+            };
+            hint.textContent = hints[executor] || hints.cloud_image_to_image;
+        }
+        function generationPayload() {
+            return {
+                analysis_id: currentAnalysisId,
+                prompt: document.getElementById('gen-prompt').value,
+                mode: document.getElementById('generation-mode').value,
+                executor: document.getElementById('executor-select').value,
+                style: document.getElementById('style-select').value,
+                width: parseInt(document.getElementById('gen-width').value),
+                height: parseInt(document.getElementById('gen-height').value),
+                num_images: 1
+            };
+        }
+        function resetEditPlanPreview() {
+            currentEditPlan = null;
+            const preview = document.getElementById('edit-plan-preview');
+            if(preview) { preview.classList.add('hidden'); preview.innerHTML = ''; }
+            const button = document.getElementById('generate-button');
+            if(button) button.classList.add('hidden');
+        }
+        async function previewEditPlan(planMode='local') {
+            if(!currentAnalysisId) { alert('请先完成分析'); return; }
+            const payload = generationPayload();
+            payload.plan_mode = planMode;
+            if(!payload.prompt) { alert('请输入生成/优化指令'); return; }
+            showLoading(planMode === 'ai' ? '正在调用模型生成AI计划...' : '正在生成快速计划...');
+            try {
+                const d = await requestJson(`${API_BASE}/generate/plan`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+                hideLoading();
+                currentEditPlan = d;
+                const preview = document.getElementById('edit-plan-preview');
+                preview.innerHTML = editPlanCard(d.edit_plan, d.executor_reason);
+                preview.classList.remove('hidden');
+                document.getElementById('generate-button').classList.remove('hidden');
+            } catch(e) { hideLoading(); alert('生成编辑计划失败: '+e.message); }
         }
         async function generateImage() {
             if(!currentAnalysisId) { alert('请先完成分析'); return; }
-            const prompt = document.getElementById('gen-prompt').value;
-            if(!prompt) { alert('请输入生成指令'); return; }
+            const payload = generationPayload();
+            if(!payload.prompt) { alert('请输入生成/优化指令'); return; }
+            if(!currentEditPlan) { await previewEditPlan('local'); if(!currentEditPlan) return; }
+            payload.plan_mode = currentEditPlan.plan_mode || 'local';
+            payload.edit_plan_override = currentEditPlan.edit_plan;
             showLoading('正在生成图片...');
-            try { const task = await requestJson(`${API_BASE}/generate/async`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({analysis_id:currentAnalysisId,prompt,style:document.getElementById('style-select').value,width:parseInt(document.getElementById('gen-width').value),height:parseInt(document.getElementById('gen-height').value),num_images:1})});
+            try { const task = await requestJson(`${API_BASE}/generate/async`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
                 const d = await pollTask(task.task_id, result => result); hideLoading(); setStep(4);
-                document.getElementById('generated-grid').innerHTML = d.generated_images.map(i=>generatedImageCard({...i, prompt: d.prompt, analysis_id: d.analysis_id})).join('');
+                document.getElementById('generated-grid').innerHTML = `${editPlanCard(d.edit_plan, d.executor_reason)}${d.generated_images.map(i=>generatedImageCard({...i, prompt: d.prompt, analysis_id: d.analysis_id})).join('')}`;
             } catch(e) { hideLoading(); alert('生成失败: '+e.message); }
         }
+        function editPlanCard(plan, executorReason) {
+            if(!plan) return '';
+            const list = (items, emptyText) => {
+                const values = Array.isArray(items) ? items.filter(Boolean) : [];
+                if(!values.length) return `<li>${escapeHtml(emptyText)}</li>`;
+                return values.map(item => `<li>• ${escapeHtml(item)}</li>`).join('');
+            };
+            return `<div class="col-span-full border rounded-lg bg-white p-4 text-sm text-gray-700 space-y-3">
+                <div class="flex items-start justify-between gap-4">
+                    <div><h3 class="font-medium text-gray-900">${escapeHtml(currentEditPlan?.plan_mode === 'ai' ? 'AI计划' : '快速计划')}</h3><p class="text-xs text-gray-500 mt-1">${escapeHtml(plan.executor || '')} · ${escapeHtml(executorReason || plan.executor_reason || '')}${currentEditPlan?.planner_model ? ' · ' + escapeHtml(currentEditPlan.planner_provider || '') + '/' + escapeHtml(currentEditPlan.planner_model || '') : ''}</p></div>
+                    <span class="text-xs text-gray-400">${escapeHtml(plan.source_reference || '')}</span>
+                </div>
+                <p><b>意图:</b> ${escapeHtml(plan.intent || '')}</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div><b>必须保留</b><ul class="mt-1 space-y-1">${list(plan.must_preserve, '无')}</ul></div>
+                    <div><b>允许修改</b><ul class="mt-1 space-y-1">${list(plan.allowed_edits, '无')}</ul></div>
+                    <div><b>禁止/风险</b><ul class="mt-1 space-y-1">${list([...(plan.must_not_change || []), ...(plan.risk_flags || [])], '无')}</ul></div>
+                </div>
+            </div>`;
+        }
         function generatedImageCard(i) {
-            return `<div class="card rounded-lg overflow-hidden border bg-white"><button onclick="openImageReview('${escapeHtml(i.url)}','${escapeHtml(i.filename)}','${escapeHtml(i.width || '')}×${escapeHtml(i.height || '')}')" class="block w-full"><img src="${escapeHtml(i.url)}" alt="${escapeHtml(i.filename)}" class="w-full h-48 object-cover bg-gray-100"></button><div class="p-3 text-xs text-gray-500 space-y-2"><div class="flex items-center justify-between"><span>${escapeHtml(i.width || '')}×${escapeHtml(i.height || '')}</span><a href="${escapeHtml(i.url)}" target="_blank" rel="noopener" class="text-blue-500 hover:text-blue-700">打开原图</a></div><p class="line-clamp-3">${escapeHtml(i.prompt || '')}</p></div></div>`;
+            return `<div class="card rounded-lg overflow-hidden border bg-white"><button onclick="openImageReview('${escapeHtml(i.url)}','${escapeHtml(i.filename)}','${escapeHtml(i.width || '')}×${escapeHtml(i.height || '')}')" class="block w-full"><img src="${escapeHtml(i.url)}" alt="${escapeHtml(i.filename)}" class="w-full h-48 object-cover bg-gray-100"></button><div class="p-3 text-xs text-gray-500 space-y-2"><div class="flex items-center justify-between"><span>${escapeHtml(i.width || '')}×${escapeHtml(i.height || '')}</span><a href="${escapeHtml(i.url)}" target="_blank" rel="noopener" class="text-blue-500 hover:text-blue-700">打开原图</a></div><p>${escapeHtml(i.provider || '')} · ${escapeHtml(i.model || '')}</p><p class="line-clamp-3">${escapeHtml(i.prompt || '')}</p></div></div>`;
         }
         async function loadGeneratedImages() {
             try { const d = await requestJson(`${API_BASE}/generate/history`);
@@ -392,7 +551,7 @@
         }
         async function deleteImage(id) { if(!confirm('确定删除？')) return; try { await fetch(`${API_BASE}/images/${id}`,{method:'DELETE'}); loadImages(); } catch(e) { alert('删除失败'); } }
         function setStep(n) { for(let i=1;i<=4;i++) { const s=document.getElementById(`step${i}`),p=document.getElementById(`step${i}-panel`); s.className=i<=n?'w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-active':'w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-inactive'; p.classList.toggle('hidden',i!==n); } }
-        function resetFlow() { selectedImageId=null; currentAnalysisId=null; uploadedFiles=[]; setStep(1); document.getElementById('preview-area').classList.add('hidden'); }
+        function resetFlow() { selectedImageId=null; currentAnalysisId=null; currentEditPlan=null; uploadedFiles=[]; setStep(1); document.getElementById('preview-area').classList.add('hidden'); document.getElementById('selected-image-summary')?.classList.add('hidden'); resetEditPlanPreview(); }
         const ua = document.querySelector('.upload-area');
         ua.addEventListener('dragover', e=>{e.preventDefault();ua.classList.add('dragover');});
         ua.addEventListener('dragleave', ()=>ua.classList.remove('dragover'));
@@ -403,6 +562,7 @@
         // 设置相关函数
         const providerDefaults = {
             openai: { base: 'https://api.openai.com/v1', vision: 'gpt-4o', image: 'dall-e-3' },
+            openrouter: { base: 'https://openrouter.ai/api/v1', vision: 'openai/gpt-5.4-image-2', image: 'openai/gpt-5.4-image-2' },
             xiaomi_mimo: { base: 'https://api.mimo.xiaomi.com/v1', vision: 'MiMo-VL-7B', image: '' },
             aliyun: { base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', vision: 'qwen-vl-plus', image: 'wanx-v1' },
             zhipu: { base: 'https://open.bigmodel.cn/api/paas/v4', vision: 'glm-4v', image: 'cogview-3' },
@@ -485,6 +645,11 @@
                     if(apikey) body.openai_api_key = apikey;
                     if(visionModel) body.openai_vision_model = visionModel;
                     if(imageModel) body.openai_image_model = imageModel;
+                } else if(provider === 'openrouter') {
+                    body.openrouter_api_base = baseurl;
+                    if(apikey) body.openrouter_api_key = apikey;
+                    if(visionModel) body.openrouter_vision_model = visionModel;
+                    if(imageModel) body.openrouter_image_model = imageModel;
                 } else {
                     body.custom_api_base = baseurl;
                     if(apikey) body.custom_api_key = apikey;

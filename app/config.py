@@ -40,9 +40,15 @@ class Settings(BaseSettings):
     OPENAI_VISION_MODEL: str = "gpt-4-vision-preview"
     OPENAI_IMAGE_MODEL: str = "dall-e-3"
     
+    # OpenRouter配置
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_API_BASE: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_VISION_MODEL: str = "openai/gpt-5.4-image-2"
+    OPENROUTER_IMAGE_MODEL: str = "openai/gpt-5.4-image-2"
+
     # 第三方API提供商配置（OpenAI兼容）
-    # 支持小米MIMO、Azure OpenAI、阿里云通义千问、百度文心一言等
-    API_PROVIDER: str = "openai"  # openai, azure, xiaomi_mimo, aliyun, baidu, custom
+    # 支持OpenRouter、小米MIMO、Azure OpenAI、阿里云通义千问、百度文心一言等
+    API_PROVIDER: str = "openai"  # openai, openrouter, azure, xiaomi_mimo, aliyun, baidu, custom
     CUSTOM_API_BASE: str = ""
     CUSTOM_API_KEY: str = ""
     CUSTOM_VISION_MODEL: str = ""
