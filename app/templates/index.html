@@ -3,89 +3,203 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图片信息解析系统</title>
+    <title>imgInfo 专利视觉工作台</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-        .upload-area { border: 2px dashed #cbd5e0; transition: all 0.3s; }
-        .upload-area:hover, .upload-area.dragover { border-color: #4299e1; background: #ebf8ff; }
-        .card { transition: all 0.3s; }
-        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-        .step-active { background: #4299e1; color: white; }
+        :root {
+            --bg: #f5f7fa;
+            --surface: #ffffff;
+            --surface-soft: #f8fafc;
+            --ink: #172033;
+            --muted: #667085;
+            --line: #d8dee8;
+            --accent: #1f6f78;
+            --accent-strong: #15535a;
+            --accent-soft: #e7f3f4;
+            --warn-soft: #fff7df;
+        }
+        body { background: var(--bg); color: var(--ink); }
+        .app-shell { min-height: 100vh; padding-bottom: 76px; }
+        .topbar { background: rgba(255,255,255,0.94); border-bottom: 1px solid var(--line); backdrop-filter: blur(10px); }
+        .brand-mark { width: 34px; height: 34px; border-radius: 8px; background: var(--accent); color: white; display: grid; place-items: center; font-weight: 800; letter-spacing: 0; }
+        .nav-button { border: 1px solid transparent; border-radius: 8px; color: var(--muted); transition: all .18s ease; }
+        .nav-button:hover { background: var(--surface-soft); color: var(--ink); }
+        .nav-button.is-active { background: var(--accent); color: white; box-shadow: 0 8px 20px rgba(31,111,120,.18); }
+        .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: rgba(255,255,255,.96); border-top: 1px solid var(--line); backdrop-filter: blur(12px); }
+        .bottom-nav button { color: var(--muted); }
+        .bottom-nav button.is-active { color: var(--accent); font-weight: 700; }
+        .workspace-grid { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 20px; align-items: start; }
+        .flow-rail { position: sticky; top: 88px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+        .flow-step { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 8px; color: var(--muted); }
+        .flow-step-number { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: #edf1f6; color: var(--muted); font-size: 13px; font-weight: 800; flex: 0 0 auto; }
+        .flow-step.is-active { background: var(--accent-soft); color: var(--accent-strong); }
+        .flow-step.is-active .flow-step-number { background: var(--accent); color: white; }
+        .flow-step.is-done .flow-step-number { background: #d8ecee; color: var(--accent-strong); }
+        .panel-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 30px rgba(15,23,42,.04); }
+        .section-title { font-size: 15px; font-weight: 800; color: var(--ink); }
+        .section-subtitle { font-size: 13px; color: var(--muted); margin-top: 2px; }
+        .upload-area { border: 1.5px dashed #aab5c4; transition: all 0.2s; background: var(--surface-soft); }
+        .upload-area:hover, .upload-area.dragover { border-color: var(--accent); background: var(--accent-soft); }
+        .card { transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; background: var(--surface); }
+        .card:hover { transform: translateY(-1px); border-color: #b7c2d0; box-shadow: 0 10px 24px rgba(15,23,42,.08); }
+        .primary-button { background: var(--accent); color: white; border-radius: 8px; }
+        .primary-button:hover { background: var(--accent-strong); }
+        .secondary-button { background: #eef2f6; color: #334155; border-radius: 8px; }
+        .secondary-button:hover { background: #e2e8f0; }
+        .step-active { background: var(--accent); color: white; }
         .step-inactive { background: #e2e8f0; color: #718096; }
-        .fade-in { animation: fadeIn 0.3s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.24s ease-in; }
+        .asset-section { scroll-margin-top: 96px; }
+        .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .analysis-card { border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 14px; }
+        .analysis-card h3 { font-size: 14px; font-weight: 800; color: var(--ink); margin-bottom: 8px; }
+        .analysis-card p, .analysis-card li { line-height: 1.55; }
+        .analysis-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .compact-list { display: grid; gap: 6px; }
+        .compact-list li { background: var(--surface-soft); border: 1px solid #edf1f6; border-radius: 7px; padding: 7px 9px; }
+        .detail-block { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 8px; }
+        .detail-block summary { cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 700; }
+        .scroll-text { max-height: 150px; overflow: auto; padding-right: 4px; }
+        .library-tabs { display: none; }
+        .library-grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(360px, 5fr); gap: 14px; align-items: start; }
+        .library-panel { padding: 14px; }
+        .library-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+        .asset-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+        .asset-card { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+        .asset-thumb { width: 100%; height: 86px; object-fit: cover; background: #f1f5f9; display: block; }
+        .asset-meta { padding: 6px 7px 7px; }
+        .asset-title { font-size: 11px; color: #334155; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .asset-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 3px; font-size: 10px; color: #8a94a3; }
+        .generated-list { display: grid; gap: 8px; }
+        .generated-row { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 84px; border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 7px; text-align: left; width: 100%; transition: border-color .18s ease, box-shadow .18s ease; }
+        .generated-row:hover { border-color: #b7c2d0; box-shadow: 0 8px 18px rgba(15,23,42,.07); }
+        .generated-thumb { width: 76px; height: 64px; border-radius: 6px; object-fit: cover; background: #f1f5f9; }
+        .generated-title { font-size: 12px; font-weight: 700; color: var(--ink); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .generated-meta { font-size: 10px; color: #8a94a3; line-height: 1.35; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .generated-prompt { font-size: 11px; color: #64748b; line-height: 1.35; margin-top: 4px; }
+        .generated-action { color: var(--accent); font-size: 11px; font-weight: 700; padding: 6px 7px; border-radius: 7px; background: var(--accent-soft); align-self: center; }
+        .analysis-summary { margin-top: 10px; }
+        .sticky-actions { position: sticky; bottom: 78px; z-index: 20; background: linear-gradient(to top, rgba(255,255,255,.98), rgba(255,255,255,.92)); border-top: 1px solid var(--line); padding-top: 12px; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 900px) {
+            .workspace-grid { display: block; }
+            .library-grid { display: block; }
+            .library-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
+            .library-tab { border: 1px solid var(--line); border-radius: 8px; padding: 9px 6px; font-size: 12px; color: var(--muted); background: #fff; }
+            .library-tab.is-active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 800; }
+            .library-section.is-mobile-hidden { display: none; }
+            .library-panel { padding: 12px; }
+            .asset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+            .asset-thumb { height: 92px; }
+            .generated-row { grid-template-columns: 72px minmax(0, 1fr); min-height: 86px; }
+            .generated-thumb { width: 72px; height: 66px; }
+            .generated-action { grid-column: 2; justify-self: start; padding: 0; background: transparent; margin-top: -2px; }
+            .flow-rail { position: static; margin-bottom: 16px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; padding: 8px; }
+            .flow-step { justify-content: center; padding: 8px 4px; }
+            .flow-step span:last-child { display: none; }
+            .flow-step-number { width: 30px; height: 30px; }
+            .desktop-nav { display: none; }
+            .mobile-stack { grid-template-columns: 1fr !important; }
+            .analysis-grid { grid-template-columns: 1fr; }
+            .panel-card { border-radius: 8px; }
+            .sticky-actions { bottom: 64px; }
+        }
+        @media (min-width: 901px) {
+            .bottom-nav { display: none; }
+            .app-shell { padding-bottom: 0; }
+            .analysis-summary #analysis-list { max-height: 220px; overflow: auto; padding-right: 3px; }
+        }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
-    <div id="app">
-        <nav class="bg-white shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-                <h1 class="text-xl font-bold text-gray-800">📸 图片信息解析系统</h1>
-                <div class="flex space-x-2">
-                    <button onclick="showTab('upload')" id="tab-upload" class="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500 text-white">上传</button>
-                    <button onclick="showTab('gallery')" id="tab-gallery" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">图库</button>
-                    <button onclick="showTab('generated')" id="tab-generated" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">生成图</button>
-                    <button onclick="showTab('analysis')" id="tab-analysis" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">分析</button>
-                    <button onclick="showTab('settings')" id="tab-settings" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">⚙️ 设置</button>
+<body>
+    <div id="app" class="app-shell">
+        <nav class="topbar sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="brand-mark">i</div>
+                    <div class="min-w-0">
+                        <h1 class="text-lg font-extrabold truncate">imgInfo 专利视觉工作台</h1>
+                        <p class="hidden sm:block text-xs text-gray-500">上传、分析、计划、生成和审阅集中在一个工作流里</p>
+                    </div>
+                </div>
+                <div class="desktop-nav flex space-x-2">
+                    <button onclick="showTab('upload')" id="tab-upload" class="nav-button is-active px-4 py-2 text-sm font-semibold">工作台</button>
+                    <button onclick="showTab('gallery')" id="tab-gallery" class="nav-button px-4 py-2 text-sm font-semibold">资料库</button>
+                    <button onclick="showTab('settings')" id="tab-settings" class="nav-button px-4 py-2 text-sm font-semibold">设置</button>
                 </div>
             </div>
         </nav>
-        <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="max-w-7xl mx-auto px-4 py-5 md:py-6">
             <div id="panel-upload" class="fade-in">
-                <div class="flex items-center justify-center mb-8">
-                    <div class="flex items-center">
-                        <div id="step1" class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-active">1</div>
-                        <div class="w-20 h-1 bg-blue-200"></div>
-                        <div id="step2" class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-inactive">2</div>
-                        <div class="w-20 h-1 bg-gray-200"></div>
-                        <div id="step3" class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-inactive">3</div>
-                        <div class="w-20 h-1 bg-gray-200"></div>
-                        <div id="step4" class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-inactive">4</div>
-                    </div>
+                <div class="mb-5">
+                    <h2 class="text-2xl font-extrabold tracking-tight">工作台</h2>
+                    <p class="text-sm text-gray-500 mt-1">围绕单张专利视觉资料完成从导入到生成审阅的闭环。</p>
                 </div>
+                <div class="workspace-grid">
+                    <aside class="flow-rail" aria-label="工作流步骤">
+                        <div id="step1" class="flow-step is-active"><span class="flow-step-number">1</span><span class="text-sm font-semibold">导入资料</span></div>
+                        <div id="step2" class="flow-step"><span class="flow-step-number">2</span><span class="text-sm font-semibold">补充上下文</span></div>
+                        <div id="step3" class="flow-step"><span class="flow-step-number">3</span><span class="text-sm font-semibold">分析与计划</span></div>
+                        <div id="step4" class="flow-step"><span class="flow-step-number">4</span><span class="text-sm font-semibold">生成审阅</span></div>
+                        <div class="flow-step"><span class="flow-step-number">5</span><span class="text-sm font-semibold">资料沉淀</span></div>
+                    </aside>
+                    <main class="min-w-0">
                 <div id="step1-panel">
-                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                        <h2 class="text-lg font-semibold mb-4">上传图片</h2>
-                        <div class="upload-area rounded-xl p-12 text-center cursor-pointer" onclick="document.getElementById('fileInput').click()">
+                    <div class="panel-card p-5 md:p-6 mb-5">
+                        <div class="mb-4">
+                            <h2 class="section-title">导入图片</h2>
+                            <p class="section-subtitle">支持截图、流程图、产品照片和结构示意图。</p>
+                        </div>
+                        <div class="upload-area rounded-lg p-8 md:p-12 text-center cursor-pointer" onclick="document.getElementById('fileInput').click()">
                             <input type="file" id="fileInput" multiple accept="image/*" class="hidden" onchange="handleFiles(this.files)">
-                            <div class="text-5xl mb-4">📁</div>
-                            <p class="text-gray-600 mb-2">拖拽图片到此处或点击上传</p>
+                            <div class="text-4xl mb-4">+</div>
+                            <p class="text-gray-700 font-semibold mb-2">拖拽图片到此处或点击上传</p>
                             <p class="text-sm text-gray-400">支持 JPG, PNG, BMP, GIF, TIFF, WebP · 最大 10MB</p>
                         </div>
                     </div>
                     <div id="preview-area" class="hidden">
-                        <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                            <h2 class="text-lg font-semibold mb-4">待上传图片</h2>
+                        <div class="panel-card p-5 md:p-6 mb-5">
+                            <h2 class="section-title mb-4">待上传图片</h2>
                             <div id="preview-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"></div>
-                            <div class="flex justify-end">
-                                <button onclick="uploadAll()" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">上传全部</button>
+                            <div class="sticky-actions flex justify-end">
+                                <button onclick="uploadAll()" class="primary-button px-6 py-2 font-semibold">上传全部</button>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div id="step2-panel" class="hidden">
-                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                        <h2 class="text-lg font-semibold mb-4">选择图片进行专利分析</h2>
+                    <div class="panel-card p-5 md:p-6 mb-5">
+                        <div class="mb-5">
+                            <h2 class="section-title">选择图片并补充上下文</h2>
+                            <p class="section-subtitle">让模型在图片事实和专利文本之间建立对应关系。</p>
+                        </div>
                         <div class="mb-5">
                             <label class="block text-sm font-medium text-gray-700 mb-1">专利原文 / 上下文材料</label>
                             <textarea id="analysis-context" rows="5" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="可粘贴权利要求、说明书片段、技术交底或图片来源说明。模型会把这里作为确定性输入上下文，并判断图片与文本的对应关系。"></textarea>
                         </div>
                         <div id="uploaded-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"></div>
                         <div id="selected-image-summary" class="hidden bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-800 mb-4"></div>
-                        <div class="flex justify-end gap-3">
-                            <button onclick="setStep(1)" class="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">返回上传</button>
-                            <button onclick="startAnalysis()" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">开始分析</button>
+                        <div class="sticky-actions flex justify-end gap-3">
+                            <button onclick="setStep(1)" class="secondary-button px-5 py-2">返回上传</button>
+                            <button onclick="startAnalysis()" class="primary-button px-6 py-2 font-semibold">开始分析</button>
                         </div>
                     </div>
                 </div>
                 <div id="step3-panel" class="hidden">
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="bg-white rounded-xl shadow-sm p-6">
-                            <h2 class="text-lg font-semibold mb-4">分析结果</h2>
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 mobile-stack">
+                        <div class="panel-card p-5 md:p-6 lg:col-span-7">
+                            <div class="mb-4">
+                                <h2 class="section-title">分析结果</h2>
+                                <p class="section-subtitle">先确认可见事实和文本支撑点，再进入生成计划。</p>
+                            </div>
                             <div id="analysis-result" class="space-y-4"></div>
                         </div>
-                        <div class="bg-white rounded-xl shadow-sm p-6">
-                            <h2 class="text-lg font-semibold mb-4">图片生成</h2>
+                        <div class="panel-card p-5 md:p-6 lg:col-span-5">
+                            <div class="mb-4">
+                                <h2 class="section-title">生成计划</h2>
+                                <p class="section-subtitle">先生成编辑计划，确认后再执行。</p>
+                            </div>
                             <div class="space-y-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">生成模式</label>
@@ -124,57 +238,107 @@
                                     <div><label class="block text-sm font-medium text-gray-700 mb-1">高度</label><input type="number" id="gen-height" value="512" onchange="resetEditPlanPreview()" class="w-full border rounded-lg px-3 py-2"></div>
                                 </div>
                                 <div id="edit-plan-preview" class="hidden"></div>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <button onclick="previewEditPlan('local')" class="w-full px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium">快速计划</button>
+                                <div class="sticky-actions grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <button onclick="previewEditPlan('local')" class="w-full px-6 py-3 primary-button font-medium">快速计划</button>
                                     <button onclick="previewEditPlan('ai')" class="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">AI计划</button>
-                                    <button id="generate-button" onclick="generateImage()" class="hidden w-full px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">确认执行</button>
+                                    <button id="generate-button" onclick="generateImage()" class="hidden w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">按计划生成</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div id="step4-panel" class="hidden">
-                    <div class="bg-white rounded-xl shadow-sm p-6">
-                        <h2 class="text-lg font-semibold mb-4">生成结果</h2>
+                    <div class="panel-card p-5 md:p-6">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                            <div>
+                                <h2 class="section-title">生成结果</h2>
+                                <p class="section-subtitle">审阅生成图、执行计划和实际调用模型。</p>
+                            </div>
+                        </div>
                         <div id="generated-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
                         <div class="mt-6 flex justify-center gap-3">
-                            <button onclick="showTab('generated')" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">查看生成图</button>
-                            <button onclick="resetFlow()" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">重新开始</button>
+                            <button onclick="showTab('gallery')" class="primary-button px-6 py-2">进入资料库</button>
+                            <button onclick="resetFlow()" class="secondary-button px-6 py-2">重新开始</button>
                         </div>
                     </div>
                 </div>
+                    </main>
+                </div>
             </div>
             <div id="panel-gallery" class="hidden fade-in">
-                <div class="bg-white rounded-xl shadow-sm p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-lg font-semibold">图片库</h2>
-                        <button onclick="loadImages()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">刷新</button>
-                    </div>
-                    <div id="gallery-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+                <div class="mb-3">
+                    <h2 class="text-2xl font-extrabold tracking-tight">资料库</h2>
+                    <p class="text-sm text-gray-500 mt-1">按源图、生成版本和分析记录沉淀资产，后续可继续回到工作台处理。</p>
+                </div>
+                <div class="library-tabs" aria-label="资料库分类">
+                    <button id="library-tab-source" class="library-tab is-active" onclick="showLibrarySection('source')">源图</button>
+                    <button id="library-tab-generated" class="library-tab" onclick="showLibrarySection('generated')">生成</button>
+                    <button id="library-tab-analysis" class="library-tab" onclick="showLibrarySection('analysis')">分析</button>
+                </div>
+                <div class="library-grid">
+                    <section class="asset-section panel-card library-panel library-section" id="asset-source-section" data-library-section="source">
+                        <div class="library-panel-header">
+                            <div>
+                                <h2 class="section-title">源图资产</h2>
+                                <p class="section-subtitle">已上传的原始图片。</p>
+                            </div>
+                            <button onclick="loadImages()" class="primary-button px-4 py-2 text-sm">刷新</button>
+                        </div>
+                        <div id="gallery-grid" class="asset-grid"></div>
+                    </section>
+                    <aside class="space-y-3">
+                        <section class="asset-section panel-card library-panel library-section" id="asset-generated-section" data-library-section="generated">
+                            <div class="library-panel-header">
+                                <div>
+                                    <h2 class="section-title">生成版本</h2>
+                                    <p class="section-subtitle">用于审阅和比对的结果图。</p>
+                                </div>
+                                <button onclick="loadGeneratedImages()" class="secondary-button px-4 py-2 text-sm">刷新</button>
+                            </div>
+                            <div id="generated-history-grid" class="generated-list"></div>
+                        </section>
+                        <details class="asset-section panel-card library-panel library-section analysis-summary" id="asset-analysis-section" data-library-section="analysis">
+                            <summary class="flex items-center justify-between gap-3 cursor-pointer list-none">
+                                <div>
+                                    <h2 class="section-title">分析记录</h2>
+                                    <p class="section-subtitle">历史分析可一键回到工作台继续生成。</p>
+                                </div>
+                                <span class="secondary-button px-4 py-2 text-sm">展开</span>
+                            </summary>
+                            <div class="mt-3 flex justify-end">
+                                <button onclick="loadAnalyses()" class="secondary-button px-4 py-2 text-sm">刷新</button>
+                            </div>
+                            <div id="analysis-list" class="space-y-4"></div>
+                        </details>
+                    </aside>
                 </div>
             </div>
             <div id="panel-generated" class="hidden fade-in">
-                <div class="bg-white rounded-xl shadow-sm p-6">
+                <div class="panel-card p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-lg font-semibold">生成图 Review</h2>
-                        <button onclick="loadGeneratedImages()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">刷新</button>
+                        <h2 class="section-title">生成图 Review</h2>
+                        <button onclick="loadGeneratedImages()" class="primary-button px-4 py-2 text-sm">刷新</button>
                     </div>
-                    <div id="generated-history-grid" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+                    <div class="text-sm text-gray-500">生成图已合并到资料库。</div>
                 </div>
             </div>
             <div id="panel-analysis" class="hidden fade-in">
-                <div class="bg-white rounded-xl shadow-sm p-6">
+                <div class="panel-card p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-lg font-semibold">分析记录</h2>
-                        <button onclick="loadAnalyses()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">刷新</button>
+                        <h2 class="section-title">分析记录</h2>
+                        <button onclick="loadAnalyses()" class="primary-button px-4 py-2 text-sm">刷新</button>
                     </div>
-                    <div id="analysis-list" class="space-y-4"></div>
+                    <div class="text-sm text-gray-500">分析记录已合并到资料库。</div>
                 </div>
             </div>
             <div id="panel-settings" class="hidden fade-in">
+                <div class="mb-5">
+                    <h2 class="text-2xl font-extrabold tracking-tight">设置</h2>
+                    <p class="text-sm text-gray-500 mt-1">配置模型服务、上传限制和默认生成参数。</p>
+                </div>
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="bg-white rounded-xl shadow-sm p-6">
-                        <h2 class="text-lg font-semibold mb-4">🔑 API配置</h2>
+                    <div class="panel-card p-5 md:p-6">
+                        <h2 class="section-title mb-4">API 配置</h2>
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">API提供商</label>
@@ -204,8 +368,8 @@
                                 <input type="text" id="settings-image-model" class="w-full border rounded-lg px-3 py-2" placeholder="如: dall-e-3">
                             </div>
                             <div class="flex space-x-3">
-                                <button onclick="testConnection()" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm">🔗 测试连接</button>
-                                <button onclick="saveAPISettings()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">💾 保存配置</button>
+                                <button onclick="testConnection()" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm">测试连接</button>
+                                <button onclick="saveAPISettings()" class="primary-button px-4 py-2 text-sm">保存配置</button>
                             </div>
                             <div id="api-test-result" class="hidden text-sm p-3 rounded-lg"></div>
                             <div class="bg-gray-50 rounded-lg p-3">
@@ -213,8 +377,8 @@
                             </div>
                         </div>
                     </div>
-                    <div class="bg-white rounded-xl shadow-sm p-6">
-                        <h2 class="text-lg font-semibold mb-4">📁 上传限制</h2>
+                    <div class="panel-card p-5 md:p-6">
+                        <h2 class="section-title mb-4">上传限制</h2>
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">最大文件大小 (MB)</label>
@@ -245,7 +409,7 @@
                                 </div>
                             </div>
                         </div>
-                        <h2 class="text-lg font-semibold mb-4 mt-6">🎨 图片生成参数</h2>
+                        <h2 class="section-title mb-4 mt-6">图片生成参数</h2>
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">默认尺寸</label>
@@ -271,6 +435,13 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+        <div class="bottom-nav">
+            <div class="grid grid-cols-3 max-w-xl mx-auto">
+                <button onclick="showTab('upload')" id="tab-mobile-upload" class="is-active py-3 text-xs">工作台</button>
+                <button onclick="showTab('gallery')" id="tab-mobile-gallery" class="py-3 text-xs">资料库</button>
+                <button onclick="showTab('settings')" id="tab-mobile-settings" class="py-3 text-xs">设置</button>
             </div>
         </div>
         <div id="loading" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
@@ -317,8 +488,17 @@
             }
             return data;
         }
-        async function pollTask(taskId, onComplete) {
-            for(let i = 0; i < 180; i++) {
+        function formatElapsed(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const rest = seconds % 60;
+            return minutes ? `${minutes}分${String(rest).padStart(2, '0')}秒` : `${rest}秒`;
+        }
+        async function pollTask(taskId, onComplete, options = {}) {
+            const intervalMs = options.intervalMs || 2000;
+            const maxSeconds = options.maxSeconds || 900;
+            const label = options.label || '任务';
+            const maxAttempts = Math.ceil((maxSeconds * 1000) / intervalMs);
+            for(let i = 0; i < maxAttempts; i++) {
                 const task = await requestJson(`${API_BASE}/tasks/${taskId}`);
                 if(task.status === 'completed') {
                     return onComplete(task.result);
@@ -326,16 +506,37 @@
                 if(task.status === 'failed') {
                     throw new Error(task.error || '任务失败');
                 }
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                const elapsedSeconds = Math.round((i * intervalMs) / 1000);
+                const loadingText = document.getElementById('loading-text');
+                if(loadingText) loadingText.textContent = `${label}处理中，已等待 ${formatElapsed(elapsedSeconds)}。生成类模型可能需要较久，请保持页面打开。`;
+                await new Promise(resolve => setTimeout(resolve, intervalMs));
             }
-            throw new Error('任务等待超时');
+            throw new Error(`${label}仍在处理中，前端已停止等待。请稍后到资料库刷新生成版本，或降低图片尺寸后重试。`);
         }
         function showTab(tab) {
+            const target = ['generated', 'analysis'].includes(tab) ? 'gallery' : tab;
             document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.add('hidden'));
-            document.querySelectorAll('[id^="tab-"]').forEach(t => { t.classList.remove('bg-blue-500','text-white'); t.classList.add('text-gray-600'); });
-            document.getElementById(`panel-${tab}`).classList.remove('hidden');
-            const b = document.getElementById(`tab-${tab}`); b.classList.add('bg-blue-500','text-white'); b.classList.remove('text-gray-600');
-            if(tab==='gallery') loadImages(); if(tab==='generated') loadGeneratedImages(); if(tab==='analysis') loadAnalyses(); if(tab==='settings') loadSettings();
+            document.querySelectorAll('.nav-button, .bottom-nav button').forEach(t => t.classList.remove('is-active'));
+            document.getElementById(`panel-${target}`).classList.remove('hidden');
+            document.getElementById(`tab-${target}`)?.classList.add('is-active');
+            document.getElementById(`tab-mobile-${target}`)?.classList.add('is-active');
+            if(target === 'gallery') {
+                loadImages();
+                loadGeneratedImages();
+                loadAnalyses();
+                showLibrarySection('source');
+            }
+            if(target === 'settings') loadSettings();
+        }
+        function showLibrarySection(section) {
+            document.querySelectorAll('.library-tab').forEach(tab => tab.classList.remove('is-active'));
+            document.getElementById(`library-tab-${section}`)?.classList.add('is-active');
+            if(!window.matchMedia('(max-width: 900px)').matches) return;
+            document.querySelectorAll('.library-section').forEach(panel => {
+                panel.classList.toggle('is-mobile-hidden', panel.dataset.librarySection !== section);
+            });
+            const analysisPanel = document.getElementById('asset-analysis-section');
+            if(analysisPanel) analysisPanel.open = section === 'analysis';
         }
         function handleFiles(files) {
             const g = document.getElementById('preview-grid'); g.innerHTML = '';
@@ -382,7 +583,7 @@
             showLoading('正在分析...');
             const userContext = document.getElementById('analysis-context')?.value || '';
             try { const task = await requestJson(`${API_BASE}/analyze/async`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_id:selectedImageId,model_name:'default',patent_focus:'general',user_context:userContext})});
-                const d = await pollTask(task.task_id, result => result); hideLoading(); currentAnalysisId = d.id; setStep(3); displayAnalysis(d);
+                const d = await pollTask(task.task_id, result => result, { label: '分析', maxSeconds: 600 }); hideLoading(); currentAnalysisId = d.id; setStep(3); displayAnalysis(d);
             } catch(e) { hideLoading(); alert('分析失败: '+e.message); }
         }
         function displayAnalysis(d) {
@@ -392,28 +593,75 @@
             const visibleEvidence = context.visible_evidence || d.structured_result?.components || [];
             const supportedPoints = contextAnalysis.supported_points || [];
             const contextGaps = contextAnalysis.gaps || context.uncertainties || d.structured_result?.risk_flags || [];
-            const contextList = (items, emptyText) => {
+            const normalizeItems = items => Array.isArray(items) ? items.filter(Boolean) : [];
+            const compactList = (items, emptyText, limit = 4) => {
+                const values = normalizeItems(items);
+                if(!values.length) return `<li>${escapeHtml(emptyText)}</li>`;
+                return values.slice(0, limit).map(item => `<li class="text-sm text-gray-700 line-clamp-2">${escapeHtml(item)}</li>`).join('');
+            };
+            const detailList = (items, emptyText) => {
                 const values = Array.isArray(items) ? items.filter(Boolean) : [];
                 if(!values.length) return `<li>${escapeHtml(emptyText)}</li>`;
-                return values.map(item => `<li>• ${escapeHtml(item)}</li>`).join('');
+                return values.map(item => `<li class="text-sm text-gray-700">${escapeHtml(item)}</li>`).join('');
             };
+            const title = d.patent_elements?.title || '未提取标题';
+            const keyFeatures = normalizeItems(d.key_features);
+            const promptFeatures = keyFeatures.slice(0, 4).join('、') || '图片中的关键技术特征';
             document.getElementById('analysis-result').innerHTML = `
-                <div class="bg-indigo-50 rounded-lg p-4">
-                    <h3 class="font-medium text-indigo-800 mb-2">输入上下文与图片对齐</h3>
-                    <div class="text-sm text-gray-700 space-y-2">
-                        <div><b>输入上下文:</b><p class="mt-1 whitespace-pre-line">${escapeHtml(userContext || '未提供专利原文或确定性上下文，本次仅基于图片分析。')}</p></div>
-                        <p><b>对齐判断:</b> ${escapeHtml(contextAnalysis.alignment || '未提供用户上下文，无法进行上下文对齐')}</p>
-                        <p><b>类型:</b> ${escapeHtml(context.image_type || d.structured_result?.image_type || '未知')} · <b>领域:</b> ${escapeHtml(context.technical_domain || d.structured_result?.technical_field || '未知')}</p>
-                        <div><b>可见事实:</b><ul class="mt-1 space-y-1">${contextList(visibleEvidence, '模型未提取到明确可见事实，需人工复核图片。')}</ul></div>
-                        <div><b>文本支持点:</b><ul class="mt-1 space-y-1">${contextList(supportedPoints, '未提供文本上下文，或图片尚未明确支撑文本中的具体技术点。')}</ul></div>
-                        <div><b>缺口 / 不一致:</b><ul class="mt-1 space-y-1">${contextList(contextGaps, '暂未发现明确缺口，但仍需人工复核图片与文本的一致性。')}</ul></div>
+                <div class="analysis-card bg-blue-50">
+                    <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
+                        <div class="min-w-0">
+                            <h3>分析摘要</h3>
+                            <p class="text-sm text-gray-700 line-clamp-3">${escapeHtml(d.technical_description || '暂无技术描述')}</p>
+                        </div>
+                        <div class="text-xs text-gray-500 flex-shrink-0">${escapeHtml(context.image_type || d.structured_result?.image_type || '未知')} · ${escapeHtml(context.technical_domain || d.structured_result?.technical_field || '未知')}</div>
+                    </div>
+                    <details class="detail-block">
+                        <summary>展开完整技术描述</summary>
+                        <p class="scroll-text mt-2 text-sm text-gray-700 whitespace-pre-line">${escapeHtml(d.technical_description || '暂无技术描述')}</p>
+                    </details>
+                </div>
+                <div class="analysis-grid">
+                    <div class="analysis-card">
+                        <h3>关键特征</h3>
+                        <ul class="compact-list">${compactList(keyFeatures, '模型未提取到明确关键特征。', 5)}</ul>
+                        ${keyFeatures.length > 5 ? `<details class="detail-block"><summary>查看全部 ${keyFeatures.length} 条</summary><ul class="mt-2 compact-list">${detailList(keyFeatures, '无')}</ul></details>` : ''}
+                    </div>
+                    <div class="analysis-card">
+                        <h3>可见事实</h3>
+                        <ul class="compact-list">${compactList(visibleEvidence, '模型未提取到明确可见事实。', 4)}</ul>
+                        ${normalizeItems(visibleEvidence).length > 4 ? `<details class="detail-block"><summary>查看全部事实</summary><ul class="mt-2 compact-list">${detailList(visibleEvidence, '无')}</ul></details>` : ''}
+                    </div>
+                    <div class="analysis-card">
+                        <h3>文本支持点</h3>
+                        <ul class="compact-list">${compactList(supportedPoints, '未提供文本上下文，或暂未找到明确支持点。', 4)}</ul>
+                    </div>
+                    <div class="analysis-card">
+                        <h3>缺口 / 风险</h3>
+                        <ul class="compact-list">${compactList(contextGaps, '暂未发现明确缺口，仍建议人工复核。', 4)}</ul>
                     </div>
                 </div>
-                <div class="bg-blue-50 rounded-lg p-4"><h3 class="font-medium text-blue-800 mb-2">技术描述</h3><p class="text-sm text-gray-700">${escapeHtml(d.technical_description)}</p></div>
-                <div class="bg-green-50 rounded-lg p-4"><h3 class="font-medium text-green-800 mb-2">关键特征</h3><ul class="text-sm text-gray-700 space-y-1">${d.key_features.map(f=>`<li>• ${escapeHtml(f)}</li>`).join('')}</ul></div>
-                <div class="bg-purple-50 rounded-lg p-4"><h3 class="font-medium text-purple-800 mb-2">专利要素</h3><div class="text-sm text-gray-700 space-y-1"><p><b>标题:</b> ${escapeHtml(d.patent_elements.title)}</p><p><b>技术问题:</b> ${escapeHtml(d.patent_elements.technical_problem)}</p><p><b>解决方案:</b> ${escapeHtml(d.patent_elements.solution)}</p><p><b>优势:</b> ${escapeHtml(d.patent_elements.advantage)}</p></div></div>
-                <div class="bg-yellow-50 rounded-lg p-4"><h3 class="font-medium text-yellow-800 mb-2">新颖性分析</h3><p class="text-sm text-gray-700 whitespace-pre-line">${escapeHtml(d.novelty_analysis)}</p></div>`;
-            document.getElementById('gen-prompt').value = `在不改变原图整体风格、布局和视觉语言的前提下，优化图片表达，使其更清晰地体现：${d.key_features.join('、')}`;
+                <div class="analysis-card">
+                    <h3>专利要素</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700">
+                        <p><b>标题：</b>${escapeHtml(title)}</p>
+                        <p><b>技术问题：</b>${escapeHtml(d.patent_elements?.technical_problem || '未提取')}</p>
+                        <p><b>解决方案：</b>${escapeHtml(d.patent_elements?.solution || '未提取')}</p>
+                        <p><b>优势：</b>${escapeHtml(d.patent_elements?.advantage || '未提取')}</p>
+                    </div>
+                </div>
+                <div class="analysis-card">
+                    <h3>上下文与新颖性</h3>
+                    <p class="text-sm text-gray-700 line-clamp-2"><b>对齐判断：</b>${escapeHtml(contextAnalysis.alignment || '未提供用户上下文，无法进行上下文对齐')}</p>
+                    <details class="detail-block">
+                        <summary>展开输入上下文与新颖性分析</summary>
+                        <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700">
+                            <div><b>输入上下文</b><p class="scroll-text mt-1 whitespace-pre-line">${escapeHtml(userContext || '未提供专利原文或确定性上下文。')}</p></div>
+                            <div><b>新颖性分析</b><p class="scroll-text mt-1 whitespace-pre-line">${escapeHtml(d.novelty_analysis || '暂无新颖性分析')}</p></div>
+                        </div>
+                    </details>
+                </div>`;
+            document.getElementById('gen-prompt').value = `在不改变原图整体风格、布局和视觉语言的前提下，优化图片表达，使其更清晰地体现：${promptFeatures}`;
             onGenerationModeChange();
         }
         function onGenerationModeChange() {
@@ -487,7 +735,7 @@
             payload.edit_plan_override = currentEditPlan.edit_plan;
             showLoading('正在生成图片...');
             try { const task = await requestJson(`${API_BASE}/generate/async`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-                const d = await pollTask(task.task_id, result => result); hideLoading(); setStep(4);
+                const d = await pollTask(task.task_id, result => result, { label: '生成', maxSeconds: 2700, intervalMs: 2500 }); hideLoading(); setStep(4);
                 document.getElementById('generated-grid').innerHTML = `${editPlanCard(d.edit_plan, d.executor_reason)}${d.generated_images.map(i=>generatedImageCard({...i, prompt: d.prompt, analysis_id: d.analysis_id})).join('')}`;
             } catch(e) { hideLoading(); alert('生成失败: '+e.message); }
         }
@@ -496,29 +744,49 @@
             const list = (items, emptyText) => {
                 const values = Array.isArray(items) ? items.filter(Boolean) : [];
                 if(!values.length) return `<li>${escapeHtml(emptyText)}</li>`;
-                return values.map(item => `<li>• ${escapeHtml(item)}</li>`).join('');
+                return values.slice(0, 4).map(item => `<li class="line-clamp-2">${escapeHtml(item)}</li>`).join('');
             };
+            const detail = items => {
+                const values = Array.isArray(items) ? items.filter(Boolean) : [];
+                if(values.length <= 4) return '';
+                return `<details class="detail-block"><summary>查看全部 ${values.length} 条</summary><ul class="mt-2 compact-list">${values.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></details>`;
+            };
+            const preserve = plan.must_preserve || [];
+            const edits = plan.allowed_edits || [];
+            const risks = [...(plan.must_not_change || []), ...(plan.risk_flags || [])];
             return `<div class="col-span-full border rounded-lg bg-white p-4 text-sm text-gray-700 space-y-3">
                 <div class="flex items-start justify-between gap-4">
                     <div><h3 class="font-medium text-gray-900">${escapeHtml(currentEditPlan?.plan_mode === 'ai' ? 'AI计划' : '快速计划')}</h3><p class="text-xs text-gray-500 mt-1">${escapeHtml(plan.executor || '')} · ${escapeHtml(executorReason || plan.executor_reason || '')}${currentEditPlan?.planner_model ? ' · ' + escapeHtml(currentEditPlan.planner_provider || '') + '/' + escapeHtml(currentEditPlan.planner_model || '') : ''}</p></div>
                     <span class="text-xs text-gray-400">${escapeHtml(plan.source_reference || '')}</span>
                 </div>
-                <p><b>意图:</b> ${escapeHtml(plan.intent || '')}</p>
+                <p class="line-clamp-2"><b>意图:</b> ${escapeHtml(plan.intent || '')}</p>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div><b>必须保留</b><ul class="mt-1 space-y-1">${list(plan.must_preserve, '无')}</ul></div>
-                    <div><b>允许修改</b><ul class="mt-1 space-y-1">${list(plan.allowed_edits, '无')}</ul></div>
-                    <div><b>禁止/风险</b><ul class="mt-1 space-y-1">${list([...(plan.must_not_change || []), ...(plan.risk_flags || [])], '无')}</ul></div>
+                    <div><b>必须保留</b><ul class="mt-1 compact-list">${list(preserve, '无')}</ul>${detail(preserve)}</div>
+                    <div><b>允许修改</b><ul class="mt-1 compact-list">${list(edits, '无')}</ul>${detail(edits)}</div>
+                    <div><b>禁止/风险</b><ul class="mt-1 compact-list">${list(risks, '无')}</ul>${detail(risks)}</div>
                 </div>
             </div>`;
         }
         function generatedImageCard(i) {
             return `<div class="card rounded-lg overflow-hidden border bg-white"><button onclick="openImageReview('${escapeHtml(i.url)}','${escapeHtml(i.filename)}','${escapeHtml(i.width || '')}×${escapeHtml(i.height || '')}')" class="block w-full"><img src="${escapeHtml(i.url)}" alt="${escapeHtml(i.filename)}" class="w-full h-48 object-cover bg-gray-100"></button><div class="p-3 text-xs text-gray-500 space-y-2"><div class="flex items-center justify-between"><span>${escapeHtml(i.width || '')}×${escapeHtml(i.height || '')}</span><a href="${escapeHtml(i.url)}" target="_blank" rel="noopener" class="text-blue-500 hover:text-blue-700">打开原图</a></div><p>${escapeHtml(i.provider || '')} · ${escapeHtml(i.model || '')}</p><p class="line-clamp-3">${escapeHtml(i.prompt || '')}</p></div></div>`;
         }
+        function generatedImageListItem(i) {
+            const meta = `${escapeHtml(i.width || '')}×${escapeHtml(i.height || '')}${i.provider || i.model ? ' · ' : ''}${escapeHtml(i.provider || '')}${i.provider && i.model ? ' / ' : ''}${escapeHtml(i.model || '')}`;
+            return `<button onclick="openImageReview('${escapeHtml(i.url)}','${escapeHtml(i.filename)}','${escapeHtml(i.width || '')}×${escapeHtml(i.height || '')}')" class="generated-row">
+                <img src="${escapeHtml(i.url)}" alt="${escapeHtml(i.filename)}" class="generated-thumb">
+                <span class="min-w-0">
+                    <span class="generated-title">${escapeHtml(i.filename || '生成图片')}</span>
+                    <span class="generated-meta">${meta}</span>
+                    <span class="generated-prompt line-clamp-2">${escapeHtml(i.prompt || '未记录生成指令')}</span>
+                </span>
+                <span class="generated-action">查看</span>
+            </button>`;
+        }
         async function loadGeneratedImages() {
             try { const d = await requestJson(`${API_BASE}/generate/history`);
                 const g = document.getElementById('generated-history-grid');
                 if(!d.generated_images.length) { g.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8">暂无生成图片</p>'; return; }
-                g.innerHTML = d.generated_images.map(i=>generatedImageCard(i)).join('');
+                g.innerHTML = d.generated_images.map(i=>generatedImageListItem(i)).join('');
             } catch(e) { console.error(e); }
         }
         function openImageReview(url, title, meta) {
@@ -536,21 +804,31 @@
             try { const r = await fetch(`${API_BASE}/images`); const d = await r.json();
                 const g = document.getElementById('gallery-grid');
                 if(!d.images.length) { g.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8">暂无图片</p>'; return; }
-                g.innerHTML = d.images.map(i=>`<div class="card rounded-lg overflow-hidden border"><img src="${escapeHtml(i.url)}" alt="${escapeHtml(i.original_filename)}" class="w-full h-32 object-cover bg-gray-100"><div class="p-2"><p class="text-xs text-gray-500 truncate">${escapeHtml(i.original_filename)}</p><p class="text-xs text-gray-400">${i.width}×${i.height}</p><button onclick="deleteImage(${i.id})" class="text-xs text-red-400 hover:text-red-600 mt-1">删除</button></div></div>`).join('');
+                g.innerHTML = d.images.map(i=>`<div class="asset-card"><img src="${escapeHtml(i.url)}" alt="${escapeHtml(i.original_filename)}" class="asset-thumb"><div class="asset-meta"><p class="asset-title">${escapeHtml(i.original_filename)}</p><div class="asset-foot"><span>${i.width}×${i.height}</span><button onclick="deleteImage(${i.id})" class="text-red-400 hover:text-red-600">删除</button></div></div></div>`).join('');
             } catch(e) { console.error(e); }
         }
         async function loadAnalyses() {
             try { const r = await fetch(`${API_BASE}/analyses`); const d = await r.json();
                 const l = document.getElementById('analysis-list');
                 if(!d.analyses.length) { l.innerHTML = '<p class="text-center text-gray-400 py-8">暂无分析记录</p>'; return; }
-                l.innerHTML = d.analyses.map(a=>`<div class="card border rounded-lg p-4 flex items-center justify-between"><div><p class="font-medium">分析 #${a.id}</p><p class="text-sm text-gray-500">图片ID: ${a.image_id} · 模型: ${escapeHtml(a.model_name)}</p><p class="text-xs text-gray-400">${escapeHtml(a.created_at)}</p></div><button onclick="viewAnalysis(${a.id})" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">查看</button></div>`).join('');
+                l.innerHTML = d.analyses.map(a=>`<div class="card border rounded-lg p-4 flex items-center justify-between gap-3"><div class="min-w-0"><p class="font-medium">分析 #${a.id}</p><p class="text-sm text-gray-500 truncate">图片ID: ${a.image_id} · 模型: ${escapeHtml(a.model_name)}</p><p class="text-xs text-gray-400">${escapeHtml(a.created_at)}</p></div><button onclick="viewAnalysis(${a.id})" class="primary-button px-4 py-2 text-sm flex-shrink-0">继续</button></div>`).join('');
             } catch(e) { console.error(e); }
         }
         async function viewAnalysis(id) {
             showLoading('加载中...'); try { const r = await fetch(`${API_BASE}/analysis/${id}`); const d = await r.json(); hideLoading(); showTab('upload'); currentAnalysisId = id; setStep(3); displayAnalysis(d); } catch(e) { hideLoading(); }
         }
         async function deleteImage(id) { if(!confirm('确定删除？')) return; try { await fetch(`${API_BASE}/images/${id}`,{method:'DELETE'}); loadImages(); } catch(e) { alert('删除失败'); } }
-        function setStep(n) { for(let i=1;i<=4;i++) { const s=document.getElementById(`step${i}`),p=document.getElementById(`step${i}-panel`); s.className=i<=n?'w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-active':'w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold step-inactive'; p.classList.toggle('hidden',i!==n); } }
+        function setStep(n) {
+            for(let i = 1; i <= 4; i++) {
+                const s = document.getElementById(`step${i}`);
+                const p = document.getElementById(`step${i}-panel`);
+                if(s) {
+                    s.classList.toggle('is-active', i === n);
+                    s.classList.toggle('is-done', i < n);
+                }
+                if(p) p.classList.toggle('hidden', i !== n);
+            }
+        }
         function resetFlow() { selectedImageId=null; currentAnalysisId=null; currentEditPlan=null; uploadedFiles=[]; setStep(1); document.getElementById('preview-area').classList.add('hidden'); document.getElementById('selected-image-summary')?.classList.add('hidden'); resetEditPlanPreview(); }
         const ua = document.querySelector('.upload-area');
         ua.addEventListener('dragover', e=>{e.preventDefault();ua.classList.add('dragover');});
@@ -591,7 +869,7 @@
                 document.getElementById('settings-img-quality').value = d.image.image_quality;
                 document.getElementById('settings-vision-tokens').value = d.image.vision_max_tokens;
                 // API状态
-                document.getElementById('api-status-text').textContent = active.api_key_configured ? `✅ 已配置 (${active.provider}) · ${active.vision_model} / ${active.image_model}` : `❌ 未配置 (${active.provider || d.api.provider})`;
+                document.getElementById('api-status-text').textContent = active.api_key_configured ? `已配置 (${active.provider}) · ${active.vision_model} / ${active.image_model}` : `未配置 (${active.provider || d.api.provider})`;
                 document.getElementById('api-status-text').className = active.api_key_configured ? 'font-medium text-green-600' : 'font-medium text-red-600';
             } catch(e) {
                 console.error('加载设置失败:', e);
@@ -618,17 +896,17 @@
                 resultEl.classList.remove('hidden');
                 if(d.success) {
                     resultEl.className = 'text-sm p-3 rounded-lg bg-green-50 text-green-800 border border-green-200';
-                    resultEl.textContent = '✅ ' + d.message + ' (提供商: ' + d.provider + ')';
+                    resultEl.textContent = '通过：' + d.message + ' (提供商: ' + d.provider + ')';
                 } else {
                     resultEl.className = 'text-sm p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
-                    resultEl.textContent = '❌ ' + d.message;
+                    resultEl.textContent = '失败：' + d.message;
                 }
             } catch(e) {
                 resultEl.classList.remove('hidden');
                 resultEl.className = 'text-sm p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
-                resultEl.textContent = '❌ 测试失败: ' + e.message;
+                resultEl.textContent = '测试失败: ' + e.message;
             }
-            btn.disabled = false; btn.textContent = '🔗 测试连接';
+            btn.disabled = false; btn.textContent = '测试连接';
         }
 
         async function saveAPISettings() {
@@ -657,7 +935,7 @@
                     body.custom_image_model = imageModel;
                 }
                 const d = await requestJson(`${API_BASE}/settings/api`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-                document.getElementById('api-status-text').textContent = d.llm_config.api_key_configured ? `✅ 已配置 (${d.llm_config.provider})` : '❌ 未配置';
+                document.getElementById('api-status-text').textContent = d.llm_config.api_key_configured ? `已配置 (${d.llm_config.provider})` : '未配置';
                 document.getElementById('api-status-text').className = d.llm_config.api_key_configured ? 'font-medium text-green-600' : 'font-medium text-red-600';
                 hideLoading();
                 alert(d.message);
